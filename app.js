@@ -199,9 +199,9 @@ function bindEvents() {
 
   elements.entryForm.addEventListener("input", handleFormActivity);
   elements.entryForm.addEventListener("change", handleFormActivity);
-  elements.entryForm.addEventListener("focusin", beginWritingActivity);
-  elements.entryForm.addEventListener("touchstart", beginWritingActivity, { passive: true });
-  elements.entryForm.addEventListener("click", beginWritingActivity);
+  elements.entryForm.addEventListener("focusin", handleEntryFormFocus);
+  elements.entryForm.addEventListener("touchstart", handleEntryFormTouch, { passive: true });
+  elements.entryForm.addEventListener("click", handleEntryFormClick);
 
   elements.saveEntry.addEventListener("click", () => {
     saveCurrentEntry({ manual: true });
@@ -279,10 +279,29 @@ function renderForm() {
         ${optionsMarkup}
         ${metricsMarkup}
         <textarea name="${field.id}__text" placeholder="写一两句就可以。"></textarea>
+        <button class="field-top-button" type="button" data-scroll-top>↑ 顶部</button>
       </section>
     `;
   }).join("");
   renderEntryToc();
+}
+
+function handleEntryFormClick(event) {
+  if (event.target.closest("[data-scroll-top]")) {
+    document.querySelector("#todayDirectory")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  beginWritingActivity();
+}
+
+function handleEntryFormFocus(event) {
+  if (event.target.closest("[data-scroll-top]")) return;
+  beginWritingActivity();
+}
+
+function handleEntryFormTouch(event) {
+  if (event.target.closest("[data-scroll-top]")) return;
+  beginWritingActivity();
 }
 
 function renderEntryToc() {
