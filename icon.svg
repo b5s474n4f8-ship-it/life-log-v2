@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Life">
+  <defs>
+    <linearGradient id="bg" x1="70" y1="34" x2="442" y2="486" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e2f4ff"/>
+      <stop offset="0.38" stop-color="#b9d8ff"/>
+      <stop offset="0.72" stop-color="#b7a9f4"/>
+      <stop offset="1" stop-color="#9b8bea"/>
+    </linearGradient>
+    <radialGradient id="gloss" cx="30%" cy="14%" r="76%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.72"/>
+      <stop offset="0.32" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="softShade" x1="90" y1="80" x2="420" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#6f5bd6" stop-opacity="0.16"/>
+    </linearGradient>
+    <filter id="wordShadow" x="-25%" y="-25%" width="150%" height="155%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#6357be" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="104" fill="url(#gloss)"/>
+  <rect width="512" height="512" rx="104" fill="url(#softShade)"/>
+  <path d="M74 86C163 48 306 38 428 92" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" opacity="0.22"/>
+
+  <g fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" filter="url(#wordShadow)" transform="translate(6 8) rotate(-10 256 256) scale(0.94 0.94)">
+    <path d="M108 326C119 260 130 186 160 118"/>
+    <path d="M112 323C148 334 184 323 212 301"/>
+    <path d="M226 294C235 258 245 222 252 188"/>
+    <path d="M283 292C287 244 299 187 330 163C347 150 364 155 366 173C369 201 324 214 285 216"/>
+    <path d="M325 224C350 212 387 213 398 234C412 262 379 297 342 301C316 304 303 292 305 273C308 244 342 230 398 230"/>
+  </g>
+  <circle cx="262" cy="110" r="13" fill="#ffffff" opacity="0.98" filter="url(#wordShadow)"/>
+</svg>
