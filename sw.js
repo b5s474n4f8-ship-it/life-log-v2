@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "life-log-stable-v8";
+const CACHE_NAME = "life-log-stable-v9";
 const APP_SHELL = [
   "./",
   "./index.html",
