@@ -4,8 +4,8 @@ const SETTINGS_KEY = "life-log-settings-v3";
 const fields = [
   {
     id: "memo",
-    title: "今天我要做的事",
-    prompt: "今天有哪些计划、提醒、临时备忘或需要托住的事？写成几条就好，不需要做成任务管理。",
+    title: "to-dos",
+    prompt: "今天有哪些计划、提醒、临时备忘或需要托住的事？写成几条就好，不需要做成很重的任务管理。",
   },
   {
     id: "spiritual",
@@ -40,7 +40,7 @@ const fields = [
     id: "chores",
     title: "庶务",
     prompt: "今天做了哪些最基础的生活照料？身体和生活空间有没有被稍微照顾到一点？",
-    options: ["洗澡", "洗衣", "排便", "饮食", "自我按摩"],
+    options: ["洗澡", "洗衣", "排便", "自我按摩"],
   },
   {
     id: "movement",
@@ -54,15 +54,9 @@ const fields = [
   },
   {
     id: "inner",
-    title: "内在状态",
-    prompt: "今天整体处于什么状态？有哪些持续存在的情绪、想法、关注点、压力、期待、困惑或内在议题？",
-    hint: "关注当天整体的心理和内在体验，而非具体事件经过。",
-  },
-  {
-    id: "energy",
-    title: "能量变化",
-    prompt: "今天哪些事情明显让我恢复能量、感到滋养或被支持？哪些事情明显让我消耗、疲惫或失去动力？为什么？",
-    hint: "重点记录影响能量的具体事件和原因。",
+    title: "内在与能量",
+    prompt: "今天整体处于什么状态？哪些事让我恢复、被支持或更有动力？哪些事让我消耗、疲惫或失去动力？",
+    hint: "把持续性的心理状态和具体能量变化放在一起看，减少重复记录。",
   },
   {
     id: "awake",
@@ -145,6 +139,17 @@ function normalizeRecord(record) {
   normalized.updatedAt = record.updatedAt || normalized.updatedAt;
   normalized.durationMs = Number(record.durationMs || record.recordingDurationMs || 0);
   normalized.fields = record.fields || {};
+  if (normalized.fields.energy) {
+    const inner = normalized.fields.inner || { text: "", options: [], metrics: {} };
+    const energy = normalized.fields.energy || {};
+    const innerText = inner.text?.trim() || "";
+    const energyText = energy.text?.trim() || "";
+    if (energyText && !innerText.includes(energyText)) {
+      inner.text = innerText ? `${innerText}\n\n能量变化：${energyText}` : energyText;
+    }
+    normalized.fields.inner = inner;
+    delete normalized.fields.energy;
+  }
   for (const field of fields) {
     if (typeof record[field.id] === "string") {
       normalized.fields[field.id] = { text: record[field.id], options: [], metrics: {} };
@@ -378,9 +383,9 @@ function renderReview() {
     ${reviewCard("记录概况", [`本周记录 ${items.length} 天。`, avgSleep ? `有 ${sleepHours.length} 天记录了睡眠，平均约 ${avgSleep} 小时。` : "睡眠还没有形成可统计数据。"])}
     ${reviewCard("灵修", [`灵修相关记录 ${spiritualDays} 天。`, ...textSnippets(items, ["spiritual"], 2)])}
     ${reviewCard("运动", [`运动相关记录 ${movementDays} 天，总时长约 ${movementMinutes || 0} 分钟。`, walkKm ? `散步/走路记录约 ${walkKm.toFixed(1)} 公里。` : "走路公里数暂时不多。", formatCounts(movement)])}
-    ${reviewCard("庶务", [formatCounts(chores) || "洗澡、洗衣、排便、饮食、自我按摩还可以继续轻量记录。"])}
+    ${reviewCard("庶务", [formatCounts(chores) || "洗澡、洗衣、排便、自我按摩还可以继续轻量记录。"])}
     ${reviewCard("身体与睡眠", [...textSnippets(items, ["body", "sleep"], 4)])}
-    ${reviewCard("内在与能量", [...textSnippets(items, ["inner", "energy"], 4)])}
+    ${reviewCard("内在与能量", [...textSnippets(items, ["inner"], 4)])}
     ${reviewCard("清醒时间", [formatCounts(awakeCounts) || "还看不出明显流向。可以继续观察学习、兴趣项目、娱乐、购物、社交对状态的影响。"])}
     ${reviewCard("创造与灵感", [...textSnippets(items, ["creation", "inspiration"], 4)])}
     ${reviewCard("关系", [...textSnippets(items, ["relationship"], 3)])}
@@ -409,7 +414,7 @@ function suggestActions(items, movementDays, spiritualDays, chores) {
   const actions = [];
   if (spiritualDays < 3) actions.push("选一个很小的灵修入口，例如只读一小段或安静祷告两分钟。");
   if (movementDays < 3) actions.push("给身体一个低门槛动作：八段锦、拉伸或走路 10 分钟都算。");
-  if (!chores["洗澡"] || !chores["饮食"]) actions.push("把洗澡、饮食这类基础照料先托住，不追求完美。");
+  if (!chores["洗澡"] || !chores["排便"]) actions.push("把洗澡、排便这类基础照料先托住，不追求完美。");
   if (!items.some((record) => hasField(record, "creation"))) actions.push("保留一个小产出：一句话、一个问题、一个片段都可以。");
   return actions.slice(0, 3);
 }

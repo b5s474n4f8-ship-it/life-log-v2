@@ -17,13 +17,13 @@
   <rect x="8" y="8" width="92" height="92" rx="22" fill="url(#sky)" filter="url(#softShadow)"/>
   <rect x="8" y="8" width="92" height="92" rx="22" fill="url(#glow)"/>
   <path d="M18 28C36 17 62 14 87 24" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="10" stroke-linecap="round"/>
-  <g transform="translate(1 5) rotate(-9 54 54)" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M25 71C29 57 31 42 34 27" stroke-width="7"/>
-    <path d="M28 70C37 69 45 66 51 61" stroke-width="7"/>
-    <path d="M53 48C50 57 49 64 51 68" stroke-width="6"/>
-    <path d="M56 36L56.4 36" stroke-width="7"/>
-    <path d="M63 70C64 56 68 41 75 33C79 28 84 28 85 33C86 38 80 42 68 44" stroke-width="6"/>
-    <path d="M63 51C70 50 77 50 84 50" stroke-width="5"/>
-    <path d="M80 64C86 54 98 57 96 64C95 70 84 74 78 68C74 64 76 57 84 52" stroke-width="6"/>
+  <g transform="translate(0 4) rotate(-8 54 54)" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 26V73H47" stroke-width="8"/>
+    <path d="M54 47V73" stroke-width="7"/>
+    <path d="M55 34H55.4" stroke-width="8"/>
+    <path d="M66 73V42C66 30 75 27 83 33" stroke-width="7"/>
+    <path d="M59 48H78" stroke-width="7"/>
+    <path d="M92 58H72" stroke-width="6"/>
+    <path d="M94 58C95 49 89 43 81 44C73 45 68 51 69 60C70 69 77 74 86 71C90 70 93 67 95 64" stroke-width="6"/>
   </g>
 </svg>

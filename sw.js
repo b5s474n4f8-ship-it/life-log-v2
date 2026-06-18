@@ -1,4 +1,4 @@
-const CACHE_NAME = "life-log-output-20260618-v1";
+const CACHE_NAME = "life-log-output-20260618-v2";
 const ASSETS = [
   "./",
   "./index.html",
