@@ -1,152 +1,88 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f7f4ef" />
+    <meta name="theme-color" content="#d8ecff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="生命力日志" />
     <title>生命力日志</title>
-    <link rel="icon" href="./icon.svg" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="app" class="app-shell">
-      <header class="topbar">
-        <img class="app-cover" src="./icon.svg" alt="" />
+    <header class="app-header" id="top">
+      <div class="brand">
+        <img class="brand-icon" src="./icon.svg" alt="" />
         <div>
-          <p class="eyebrow">Life Log</p>
+          <p class="brand-kicker">LIFE LOG</p>
           <h1>生命力日志</h1>
         </div>
-        <button id="exportJsonTop" class="icon-button" type="button">导出</button>
-      </header>
+      </div>
+      <p class="header-note">真实记录即可。空着，也是一种记录。</p>
+    </header>
 
-      <main>
-        <section id="primingView" class="view active" aria-labelledby="primingTitle">
-          <section class="intro-panel compact">
-            <p id="primingDate" class="date-line"></p>
-            <h2 id="primingTitle">热启动</h2>
-            <p class="gentle-copy">早起，或面对重要困难任务时，先用嘴把模糊团块倒出来。一天可以多次启动，重点不是想清楚结果，而是说清楚过程。</p>
-          </section>
+    <main class="app-shell">
+      <section class="panel view active" id="today-view" aria-label="今日记录">
+        <div class="date-row">
+          <label for="entry-date">日期</label>
+          <input id="entry-date" type="date" />
+        </div>
 
-          <section class="plain-panel">
-            <h3>显化过程</h3>
-            <p>边说边看见今天如何开始：在哪里、先做什么、卡住时怎么继续。任何超过一分钟的思考，先从嘴里出来。</p>
-          </section>
+        <nav class="section-index" id="section-index" aria-label="记录目录"></nav>
 
-          <section class="priming-panel">
-            <div id="primingSessionList" class="session-list"></div>
+        <form id="log-form" autocomplete="off"></form>
 
-            <label class="input-block">
-              <span>粘贴口说转写</span>
-              <textarea id="primingTranscript" placeholder="直接把口说转写粘贴在这里。冗余、口误、断句不完美都没关系。"></textarea>
-            </label>
-
-            <div class="prompt-list">
-              <p>可以按这个顺序说：</p>
-              <ol>
-                <li>今天最重要的主线是什么？</li>
-                <li>第一步在哪里发生？我先打开什么、坐在哪里、做哪个动作？</li>
-                <li>可能在哪里卡住？卡住时我怎么继续？</li>
-                <li>今天需要哪些习惯托住我？灵修、睡眠、运动、庶务、输出。</li>
-                <li>今天至少要创造或沉淀什么？</li>
-              </ol>
-            </div>
-
-            <div class="action-row">
-              <button id="generatePriming" class="primary-button" type="button">生成今日卡片</button>
-              <button id="savePriming" class="secondary-button" type="button">保存热启动</button>
-              <button id="newPriming" class="secondary-button" type="button">新建一次</button>
-            </div>
-            <p id="primingMessage" class="save-message" role="status" aria-live="polite"></p>
-          </section>
-
-          <section id="primingCards" class="card-grid"></section>
-
-          <section class="save-panel">
-            <button id="writePrimingToMemo" class="primary-button" type="button">写入今日备忘</button>
-          </section>
-        </section>
-
-        <section id="todayView" class="view" aria-labelledby="todayTitle">
-          <section class="intro-panel">
-            <p id="todayTitle" class="date-line"></p>
-            <p class="gentle-copy">这不是一次性填完的表。早上写备忘，中途补线索，晚上把身体、能量和创造放回这里。</p>
-          </section>
-
-          <section class="toolbar-row" aria-label="日期选择">
-            <button id="prevDay" class="small-button" type="button">前一天</button>
-            <label class="date-picker">
-              <span>日期</span>
-              <input id="dateInput" type="date" />
-            </label>
-            <button id="nextDay" class="small-button" type="button">后一天</button>
-          </section>
-
-          <section id="todayDirectory" class="entry-tools" aria-label="今日目录">
-            <p class="muted">目录</p>
-            <div id="entryToc" class="entry-toc"></div>
-          </section>
-
-          <form id="entryForm" class="entry-form"></form>
-
-          <section class="save-panel">
-            <button id="saveEntry" class="primary-button" type="button">保存今日记录</button>
-            <p id="saveMessage" class="save-message" role="status" aria-live="polite"></p>
-            <div class="quiet-time">
-              <span>今日记录用时</span>
-              <strong id="todayWritingTime">0分钟</strong>
-              <em id="timerState">未开始</em>
-            </div>
-          </section>
-        </section>
-
-        <section id="libraryView" class="view" aria-labelledby="libraryTitle">
-          <section class="intro-panel">
-            <p class="eyebrow">Library</p>
-            <h2 id="libraryTitle">语料</h2>
-            <p class="gentle-copy">这里保留热启动和每天倒出来的材料。先沉淀，再整理。</p>
-          </section>
-          <div id="historyList" class="history-list"></div>
-        </section>
-
-        <section id="reviewView" class="view" aria-labelledby="reviewTitle">
-          <section class="intro-panel">
-            <p class="eyebrow">Review</p>
-            <h2 id="reviewTitle">复盘</h2>
-            <p class="gentle-copy">只做观察：身体是否被托住，时间是否减少反刍，输出是否多于消费。</p>
-          </section>
-          <div id="weeklyReview" class="review-stack"></div>
-        </section>
-
-        <section id="dataView" class="view" aria-labelledby="dataTitle">
-          <section class="intro-panel">
-            <p class="eyebrow">Backup</p>
-            <h2 id="dataTitle">导出</h2>
-            <p class="gentle-copy">记录保存在当前设备和当前浏览器里。请定期导出 JSON 备份。</p>
-          </section>
-
-          <div class="data-actions">
-            <button id="exportJson" class="primary-button" type="button">导出 JSON 备份</button>
-            <button id="exportMarkdown" class="secondary-button" type="button">导出 Markdown</button>
-            <label class="import-button">
-              导入 JSON 备份
-              <input id="importJson" type="file" accept="application/json,.json" />
-            </label>
+        <section class="save-panel" id="save-panel">
+          <div>
+            <h2>保存</h2>
+            <p id="save-status">今天的内容会先留在本机。</p>
+            <p class="quiet-time" id="duration-label">今日记录用时：0 分钟</p>
           </div>
+          <button class="primary-action" type="button" id="save-button">保存今日记录</button>
         </section>
-      </main>
+      </section>
 
-      <nav class="bottom-nav" aria-label="主导航">
-        <button class="nav-button active" type="button" data-view="primingView">热启动</button>
-        <button class="nav-button" type="button" data-view="todayView">今日</button>
-        <button class="nav-button" type="button" data-view="libraryView">语料</button>
-        <button class="nav-button" type="button" data-view="reviewView">复盘</button>
-        <button class="nav-button" type="button" data-view="dataView">导出</button>
-      </nav>
-    </div>
+      <section class="panel view" id="history-view" aria-label="历史记录">
+        <div class="view-heading">
+          <h2>历史</h2>
+          <p>按日期回看，也可以点开继续补充。</p>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </section>
+
+      <section class="panel view" id="review-view" aria-label="周复盘">
+        <div class="view-heading">
+          <h2>周复盘</h2>
+          <p>基于最近 7 天的本地记录生成，不做诊断，只帮你看见。</p>
+        </div>
+        <div id="review-content" class="review-content"></div>
+      </section>
+
+      <section class="panel view" id="export-view" aria-label="导出记录">
+        <div class="view-heading">
+          <h2>导出</h2>
+          <p>记录只保存在这台设备。建议每周导出一次备份。</p>
+        </div>
+        <div class="export-actions">
+          <button type="button" id="export-json">导出 JSON</button>
+          <button type="button" id="export-md">导出 Markdown</button>
+        </div>
+        <label class="import-box" for="import-file">
+          <span>导入备份</span>
+          <input id="import-file" type="file" accept="application/json,.json" />
+        </label>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="主导航">
+      <button class="nav-button active" type="button" data-view="today-view">今日</button>
+      <button class="nav-button" type="button" data-view="history-view">历史</button>
+      <button class="nav-button" type="button" data-view="review-view">复盘</button>
+      <button class="nav-button" type="button" data-view="export-view">导出</button>
+    </nav>
 
     <script src="./app.js" defer></script>
   </body>

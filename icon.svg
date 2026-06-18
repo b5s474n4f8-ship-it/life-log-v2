@@ -1,46 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Life">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-label="Life Log">
   <defs>
-    <linearGradient id="bg" x1="64" y1="24" x2="448" y2="492" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#e7f6ff"/>
-      <stop offset="0.42" stop-color="#c2dcff"/>
-      <stop offset="0.74" stop-color="#bbaef5"/>
-      <stop offset="1" stop-color="#a18fec"/>
+    <linearGradient id="sky" x1="13" y1="8" x2="98" y2="102" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dff4ff"/>
+      <stop offset="0.42" stop-color="#b9d7ff"/>
+      <stop offset="1" stop-color="#bca8ff"/>
     </linearGradient>
-    <radialGradient id="gloss" cx="28%" cy="14%" r="78%">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.76"/>
-      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0.26"/>
+    <radialGradient id="glow" cx="30" cy="18" r="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="0.42" stop-color="#ffffff" stop-opacity="0.22"/>
       <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="145%">
-      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#6656bf" flood-opacity="0.18"/>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#6b74c7" flood-opacity="0.22"/>
     </filter>
   </defs>
-
-  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
-  <rect width="512" height="512" rx="104" fill="url(#gloss)"/>
-  <path d="M74 88C160 48 306 40 428 94" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" opacity="0.22"/>
-
-  <g
-    fill="none"
-    stroke="#ffffff"
-    stroke-width="24"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    filter="url(#shadow)"
-  >
-    <!-- L -->
-    <path d="M118 150V332H190"/>
-
-    <!-- i -->
-    <circle cx="224" cy="160" r="11" fill="#ffffff" stroke="none"/>
-    <path d="M224 216V332"/>
-
-    <!-- f -->
-    <path d="M284 332V184C284 149 306 134 338 143"/>
-    <path d="M260 224H330"/>
-
-    <!-- e -->
-    <path d="M384 244C350 244 326 264 326 292C326 321 350 340 384 336C408 333 424 322 432 306"/>
-    <path d="M326 286H432C429 259 411 244 384 244Z"/>
+  <rect x="8" y="8" width="92" height="92" rx="22" fill="url(#sky)" filter="url(#softShadow)"/>
+  <rect x="8" y="8" width="92" height="92" rx="22" fill="url(#glow)"/>
+  <path d="M18 28C36 17 62 14 87 24" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="10" stroke-linecap="round"/>
+  <g transform="translate(1 5) rotate(-9 54 54)" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M25 71C29 57 31 42 34 27" stroke-width="7"/>
+    <path d="M28 70C37 69 45 66 51 61" stroke-width="7"/>
+    <path d="M53 48C50 57 49 64 51 68" stroke-width="6"/>
+    <path d="M56 36L56.4 36" stroke-width="7"/>
+    <path d="M63 70C64 56 68 41 75 33C79 28 84 28 85 33C86 38 80 42 68 44" stroke-width="6"/>
+    <path d="M63 51C70 50 77 50 84 50" stroke-width="5"/>
+    <path d="M80 64C86 54 98 57 96 64C95 70 84 74 78 68C74 64 76 57 84 52" stroke-width="6"/>
   </g>
 </svg>

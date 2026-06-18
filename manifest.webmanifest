@@ -1,16 +1,16 @@
 {
   "name": "生命力日志",
-  "short_name": "生命力日志",
-  "description": "一个本地优先、低压力的个人生命力记录原型。",
+  "short_name": "Life Log",
+  "description": "本地优先的个人生命力日志",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f7f4ef",
-  "theme_color": "#f7f4ef",
+  "background_color": "#fbfaf6",
+  "theme_color": "#d8ecff",
   "icons": [
     {
       "src": "./icon.svg",
-      "sizes": "any",
+      "sizes": "108x108",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
