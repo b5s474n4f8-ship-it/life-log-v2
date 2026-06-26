@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#d8ecff" />
+    <meta name="theme-color" content="#dff2ff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="生命力日志" />
     <title>生命力日志</title>
@@ -21,69 +21,202 @@
           <h1>生命力日志</h1>
         </div>
       </div>
-      <p class="header-note">真实记录即可。空着，也是一种记录。</p>
     </header>
 
     <main class="app-shell">
-      <section class="panel view active" id="today-view" aria-label="今日记录">
-        <div class="date-row">
-          <label for="entry-date">日期</label>
-          <input id="entry-date" type="date" />
-        </div>
-
-        <nav class="section-index" id="section-index" aria-label="记录目录"></nav>
-
-        <form id="log-form" autocomplete="off"></form>
-
-        <section class="save-panel" id="save-panel">
+      <section class="view active" id="today-view" aria-label="今日">
+        <section class="daily-hero" id="daily-hero">
           <div>
-            <h2>保存</h2>
-            <p id="save-status">今天的内容会先留在本机。</p>
-            <p class="quiet-time" id="duration-label">今日记录用时：0 分钟</p>
+            <p class="hero-kicker" id="weekday-label">今天</p>
+            <h2 id="date-label">--</h2>
+            <p id="daily-line">慢慢来，今天先接住真实的一点。</p>
           </div>
-          <button class="primary-action" type="button" id="save-button">保存今日记录</button>
+          <button class="ghost-button" type="button" id="jump-today-button">回到今天</button>
+        </section>
+
+        <p class="history-notice" id="history-notice" hidden></p>
+
+        <section class="surface todos-surface">
+          <div class="surface-heading">
+            <div>
+              <p class="eyebrow">to-dos</p>
+              <h2>今天要托住的事</h2>
+            </div>
+            <span class="soft-count" id="todo-count">0/0</span>
+          </div>
+          <form class="todo-form" id="todo-form">
+            <input id="todo-input" type="text" placeholder="写一件事，可以很小。" autocomplete="off" />
+            <button type="submit" aria-label="添加 to-do">＋</button>
+          </form>
+          <div class="todo-list" id="todo-list"></div>
+        </section>
+
+        <section class="surface capture-surface">
+          <div class="surface-heading">
+            <div>
+              <p class="eyebrow">capture</p>
+              <h2>快速捕捉</h2>
+            </div>
+            <button class="quiet-button" type="button" id="cancel-edit-button" hidden>取消编辑</button>
+          </div>
+          <form id="entry-form">
+            <textarea id="entry-text" placeholder="先写下来。可以是一句话、一段身体信号、一点关系感受，或者只是“今天有点无聊”。"></textarea>
+            <div class="type-grid" id="entry-type-grid" aria-label="记录类型"></div>
+            <div class="detail-box" id="entry-detail-box"></div>
+            <button class="primary-action" type="submit" id="entry-submit-button">保存这一条</button>
+          </form>
+          <p class="save-line" id="save-status">记录只保存在这台设备。</p>
+          <p class="duration-line" id="duration-label">今日记录用时约 0 分钟</p>
+        </section>
+
+        <section class="flow-section">
+          <div class="surface-heading flow-heading">
+            <div>
+              <p class="eyebrow">today flow</p>
+              <h2>今天的生活流</h2>
+            </div>
+            <span class="soft-count" id="entry-count">0 条</span>
+          </div>
+          <div class="entry-list" id="today-entry-list"></div>
         </section>
       </section>
 
-      <section class="panel view" id="history-view" aria-label="历史记录">
-        <div class="view-heading">
-          <h2>历史</h2>
-          <p>按日期回看，也可以点开继续补充。</p>
-        </div>
-        <div id="history-list" class="history-list"></div>
+      <section class="view" id="records-view" aria-label="记录">
+        <section class="surface">
+          <div class="surface-heading">
+            <div>
+              <p class="eyebrow">records</p>
+              <h2>记录</h2>
+            </div>
+          </div>
+          <div class="record-controls">
+            <label>
+              <span>日期</span>
+              <input id="record-date-input" type="date" />
+            </label>
+            <label>
+              <span>类型</span>
+              <select id="record-type-filter"></select>
+            </label>
+          </div>
+        </section>
+        <div class="entry-list" id="record-entry-list"></div>
       </section>
 
-      <section class="panel view" id="review-view" aria-label="周复盘">
-        <div class="view-heading">
-          <h2>周复盘</h2>
-          <p>基于最近 7 天的本地记录生成，不做诊断，只帮你看见。</p>
-        </div>
-        <div id="review-content" class="review-content"></div>
+      <section class="view" id="leisure-view" aria-label="闲暇">
+        <section class="surface leisure-intro">
+          <div class="surface-heading">
+            <div>
+              <p class="eyebrow">leisure</p>
+              <h2>闲暇</h2>
+            </div>
+            <button class="ghost-button" type="button" id="bored-button">我有点无聊</button>
+          </div>
+          <p class="microcopy">把剧、综艺、游戏、书、纪录片和视频这些 trivial entertainment matters 放在这里。无聊时，可以知道自己还能继续看什么、读什么、玩什么。</p>
+          <div class="bored-result" id="bored-result" hidden></div>
+        </section>
+
+        <section class="surface">
+          <div class="surface-heading">
+            <div>
+              <p class="eyebrow">shelf</p>
+              <h2 id="leisure-form-title">添加一个闲暇条目</h2>
+            </div>
+            <button class="quiet-button" type="button" id="cancel-leisure-edit" hidden>取消编辑</button>
+          </div>
+          <form class="leisure-form" id="leisure-form">
+            <input id="leisure-title" type="text" placeholder="名称，例如一部剧、一本书、一个综艺" autocomplete="off" />
+            <div class="leisure-grid">
+              <select id="leisure-kind" aria-label="类型">
+                <option value="series">剧</option>
+                <option value="reality">综艺</option>
+                <option value="game">游戏</option>
+                <option value="book">书</option>
+                <option value="documentary">纪录片</option>
+                <option value="video">视频</option>
+                <option value="movie">电影</option>
+                <option value="other">其他</option>
+              </select>
+              <select id="leisure-status" aria-label="状态">
+                <option value="want">想看</option>
+                <option value="watching">在看</option>
+                <option value="paused">暂停</option>
+                <option value="finished">看完</option>
+                <option value="dropped">弃置</option>
+              </select>
+            </div>
+            <input id="leisure-progress" type="text" placeholder="进度，例如 S1E3、第 120 页、刚开始" autocomplete="off" />
+            <div class="leisure-grid">
+              <select id="leisure-context" aria-label="适合情境">
+                <option value="bored">无聊时</option>
+                <option value="low-energy">低能量</option>
+                <option value="relax">想放松</option>
+                <option value="inspire">想被启发</option>
+                <option value="social">想社交</option>
+              </select>
+              <select id="leisure-feeling" aria-label="感受">
+                <option value="nourishing">滋养</option>
+                <option value="company">陪伴</option>
+                <option value="exciting">兴奋</option>
+                <option value="draining">消耗</option>
+                <option value="plain">一般</option>
+              </select>
+            </div>
+            <textarea id="leisure-note" placeholder="一句话备注：为什么想看，或者看完之后留下什么。"></textarea>
+            <button class="primary-action" type="submit" id="leisure-submit-button">保存闲暇条目</button>
+          </form>
+        </section>
+
+        <section class="flow-section">
+          <div class="surface-heading flow-heading">
+            <div>
+              <p class="eyebrow">library</p>
+              <h2>我的闲暇清单</h2>
+            </div>
+            <span class="soft-count" id="leisure-count">0 个</span>
+          </div>
+          <div class="leisure-list" id="leisure-list"></div>
+        </section>
       </section>
 
-      <section class="panel view" id="export-view" aria-label="导出记录">
-        <div class="view-heading">
-          <h2>导出</h2>
-          <p>记录只保存在这台设备。建议每周导出一次备份。</p>
-        </div>
-        <div class="export-actions">
-          <button type="button" id="export-json">导出 JSON</button>
-          <button type="button" id="export-md">导出 Markdown</button>
-        </div>
-        <label class="import-box" for="import-file">
-          <span>导入备份</span>
-          <input id="import-file" type="file" accept="application/json,.json" />
-        </label>
+      <section class="view" id="review-view" aria-label="复盘">
+        <section class="surface">
+          <div class="surface-heading">
+            <div>
+              <p class="eyebrow">review</p>
+              <h2>周复盘</h2>
+            </div>
+          </div>
+          <p class="microcopy">基于最近 7 天本地记录生成。不诊断，不评分，只帮你把生活重新看一眼。</p>
+        </section>
+        <div class="review-content" id="review-content"></div>
+        <section class="surface export-surface">
+          <div class="surface-heading">
+            <div>
+              <p class="eyebrow">backup</p>
+              <h2>导出与导入</h2>
+            </div>
+          </div>
+          <div class="export-actions">
+            <button type="button" id="export-json">导出 JSON</button>
+            <button type="button" id="export-md">导出 Markdown</button>
+          </div>
+          <label class="import-box" for="import-file">
+            <span>导入 JSON 备份</span>
+            <input id="import-file" type="file" accept="application/json,.json" />
+          </label>
+        </section>
       </section>
     </main>
 
     <nav class="bottom-nav" aria-label="主导航">
       <button class="nav-button active" type="button" data-view="today-view">今日</button>
-      <button class="nav-button" type="button" data-view="history-view">历史</button>
+      <button class="nav-button" type="button" data-view="records-view">记录</button>
+      <button class="nav-button" type="button" data-view="leisure-view">闲暇</button>
       <button class="nav-button" type="button" data-view="review-view">复盘</button>
-      <button class="nav-button" type="button" data-view="export-view">导出</button>
     </nav>
 
     <script src="./app.js" defer></script>
   </body>
 </html>
+

@@ -1,4 +1,4 @@
-const CACHE_NAME = "life-log-output-20260618-v2";
+﻿const CACHE_NAME = "life-log-v4-20260626-sleep1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,7 +23,7 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -38,3 +38,4 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html"))),
   );
 });
+

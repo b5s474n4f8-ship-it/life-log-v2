@@ -1,229 +1,336 @@
-const STORAGE_KEY = "life-log-records-v3";
-const SETTINGS_KEY = "life-log-settings-v3";
+﻿const DB_KEY = "life-log-v4";
+const LEGACY_KEYS = ["life-log-records-v3", "life-log-records-v2", "life-log-records-v1"];
 
-const fields = [
-  {
-    id: "memo",
-    title: "to-dos",
-    prompt: "今天有哪些计划、提醒、临时备忘或需要托住的事？写成几条就好，不需要做成很重的任务管理。",
-  },
-  {
-    id: "spiritual",
-    title: "灵修",
-    prompt: "今天是否有灵修？有哪些触动、提醒、问题、挣扎或领受？今天与上帝的关系状态如何？",
-    hint: "记录与信仰、属灵生命和内在成长相关的内容。",
-    options: ["祷告", "读经", "默想", "敬拜", "阅读属灵读物"],
-  },
-  {
-    id: "sleep",
-    title: "睡眠",
-    prompt: "昨晚睡了多久？睡眠质量如何？醒来后的恢复感如何？今天是否有午休或补觉？",
-    options: ["入睡困难", "夜醒", "早醒", "睡得沉", "午休/补觉", "恢复感好"],
-    metrics: [
-      { id: "hours", label: "睡眠时长", suffix: "小时", step: "0.5" },
-      { id: "napMinutes", label: "午休/补觉", suffix: "分钟", step: "5" },
-    ],
-  },
-  {
-    id: "dream",
-    title: "梦境",
-    prompt: "是否记得梦境？有哪些画面、情节、人物、情绪或象征值得记录？",
-    hint: "无需分析，只记录内容即可。",
-  },
-  {
-    id: "body",
-    title: "身体状态",
-    prompt: "今天身体有哪些值得记录的信号？例如疼痛、疲劳、浮肿、胃口变化、经期、头痛、过敏、精力变化、紧绷或放松等。",
-    hint: "只记录身体层面的观察和感受。",
-  },
-  {
-    id: "chores",
-    title: "庶务",
-    prompt: "今天做了哪些最基础的生活照料？身体和生活空间有没有被稍微照顾到一点？",
-    options: ["洗澡", "洗衣", "排便", "自我按摩"],
-  },
-  {
-    id: "movement",
-    title: "运动",
-    prompt: "今天是否有一点点活动？时长如何？过程中和结束后的身体感受如何？散步/走路类可以补充时间和公里数。",
-    options: ["八段锦", "普拉提", "跑步机上坡走", "散步/走路", "拉伸", "HIIT", "力量训练", "其他"],
-    metrics: [
-      { id: "minutes", label: "运动时长", suffix: "分钟", step: "5" },
-      { id: "km", label: "走路公里数", suffix: "公里", step: "0.1" },
-    ],
-  },
-  {
-    id: "inner",
-    title: "内在与能量",
-    prompt: "今天整体处于什么状态？哪些事让我恢复、被支持或更有动力？哪些事让我消耗、疲惫或失去动力？",
-    hint: "把持续性的心理状态和具体能量变化放在一起看，减少重复记录。",
-  },
-  {
-    id: "awake",
-    title: "清醒时间",
-    prompt: "非当班清醒时间大致流向了哪里？学习、副业、个人兴趣项目、娱乐、购物、社交中，哪些让一天更安稳，哪些让你更疲惫？",
-    hint: "提醒：把清醒时间尽量交给有承接感的事，并保留一点有力度的身体活动，让身体真的有机会安静下来。",
-    options: ["学习", "副业", "个人兴趣项目", "娱乐", "购物", "社交", "较强体力活动"],
-  },
-  {
-    id: "creation",
-    title: "创造",
-    prompt: "今天有没有把想法、经验或价值变成某种可见的形式？哪怕只是整理出一句话、一个框架、一个小片段。",
-    hint: "创造不一定是完成作品，重点是有东西从模糊变得更清楚。",
-  },
-  {
-    id: "inspiration",
-    title: "灵感",
-    prompt: "今天是否出现值得保留的想法、洞见、观察、主题、句子、创意、问题或未来想探索的方向？",
-    hint: "只记录灵感本身，不要求立即展开。",
-  },
-  {
-    id: "relationship",
-    title: "关系",
-    prompt: "今天有没有值得记录的人际互动、关系变化、深度对话、冲突、支持、陪伴、连接感或疏离感？这些互动对我产生了什么影响？",
-  },
-  {
-    id: "free",
-    title: "自由记录",
-    prompt: "任何不属于以上分类，但希望未来回顾时能看到的内容。可以记录当天的重要事件、环境变化、随机感悟或其他补充。",
-  },
+const entryTypes = [
+  { id: "sleep", label: "睡眠" },
+  { id: "dream", label: "梦境" },
+  { id: "body", label: "身体" },
+  { id: "chores", label: "庶务" },
+  { id: "movement", label: "运动" },
+  { id: "spiritual", label: "灵修" },
+  { id: "relationship", label: "关系" },
+  { id: "inner", label: "内在与能量" },
+  { id: "creation", label: "创造" },
+  { id: "inspiration", label: "灵感" },
+  { id: "leisure", label: "闲暇" },
+  { id: "free", label: "自由" },
 ];
 
+const typeDetails = {
+  sleep: {
+    options: ["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适", "午睡/补觉", "睡得沉", "恢复感好", "恢复感差"],
+    metrics: [
+      { id: "sleepHours", label: "睡眠时长", unit: "小时", step: "0.5" },
+      { id: "napMinutes", label: "午睡/补觉时长", unit: "分钟", step: "5" },
+      { id: "sleepRecovery", label: "恢复感", unit: "/5", step: "1", min: "1", max: "5" },
+    ],
+    extras: [
+      { id: "bedtimeActivity", label: "睡前活动", placeholder: "例如刷手机、读书、祷告、聊天、运动、吃东西。" },
+      { id: "sleepFactors", label: "影响睡眠的因素", placeholder: "例如躺下没睡意、噪音、鸟叫、光线、身体不适、压力。" },
+    ],
+  },
+
+  chores: {
+    options: ["洗澡", "洗衣", "排便", "自我按摩"],
+  },
+  movement: {
+    options: ["八段锦", "普拉提", "跑步机上坡走", "散步/走路", "拉伸", "HIIT", "力量训练", "其他"],
+    metrics: [
+      { id: "movementMinutes", label: "运动时长", unit: "分钟", step: "5" },
+      { id: "walkKm", label: "走路公里数", unit: "公里", step: "0.1" },
+    ],
+  },
+  spiritual: {
+    options: ["祷告", "读经", "默想", "敬拜", "阅读属灵读物"],
+  },
+};
+
+const leisureLabels = {
+  kind: { series: "剧", reality: "综艺", game: "游戏", book: "书", documentary: "纪录片", video: "视频", movie: "电影", other: "其他" },
+  status: { want: "想看", watching: "在看", paused: "暂停", finished: "看完", dropped: "弃置" },
+  context: { bored: "无聊时", "low-energy": "低能量", relax: "想放松", inspire: "想被启发", social: "想社交" },
+  feeling: { nourishing: "滋养", company: "陪伴", exciting: "兴奋", draining: "消耗", plain: "一般" },
+};
+
+
+const typePlaceholders = {
+  sleep: "例如：昨晚躺下很久没睡意，早上被鸟叫醒；午睡 40 分钟后恢复感 3/5。",
+  dream: "只记录梦里的画面、人物、情绪或片段，不需要分析。",
+  body: "例如：头痛、浮肿、疲劳、经期、胃口、紧绷或放松。",
+  movement: "例如：八段锦 20 分钟，结束后腰舒服一点。",
+  spiritual: "例如：今天的祷告、读经、提醒、挣扎或领受。",
+  relationship: "例如：一次对话、冲突、支持、连接感或疏离感。",
+  leisure: "例如：看了哪一集、读到哪里、玩了什么，感觉是滋养还是消耗。",
+  free: "先写下来。可以是一句话、一段身体信号、一点关系感受，或者只是‘今天有点无聊’。",
+};
+const dailyThemes = [
+  { a: "#dff2ff", b: "#e8f6df", c: "#fff8df", ink: "#284d51", accent: "#4f8a73", strong: "#2f6a57" },
+  { a: "#e7f8f4", b: "#e7edff", c: "#fff0f5", ink: "#36505f", accent: "#6686b5", strong: "#365f91" },
+  { a: "#f0ecff", b: "#e4f7ff", c: "#f6f9df", ink: "#4b4261", accent: "#7f78b6", strong: "#5e5798" },
+  { a: "#fff3d6", b: "#e7f5e9", c: "#e5f4ff", ink: "#66512e", accent: "#8d9661", strong: "#686f3e" },
+  { a: "#ffeaf0", b: "#e8f6ff", c: "#eff8e6", ink: "#604653", accent: "#b07b87", strong: "#8c5a66" },
+];
+
+const dailyLines = [
+  "慢慢来，今天先接住真实的一点。",
+  "可以轻一点，但不要从自己的生活里缺席。",
+  "今天不需要完整，只需要有一个入口。",
+  "把模糊放下来一点，身体和心会自己说话。",
+  "先记录，再整理；先看见，再判断。",
+  "给生活一点秩序，也给自己一点余地。",
+  "不急着成为更好的人，先和今天在一起。",
+];
+
+const legacyMap = {
+  spiritual: "spiritual",
+  sleep: "sleep",
+  dream: "dream",
+  body: "body",
+  chores: "chores",
+  movement: "movement",
+  inner: "inner",
+  energy: "inner",
+  awake: "free",
+  creation: "creation",
+  inspiration: "inspiration",
+  relationship: "relationship",
+  free: "free",
+};
+
+const legacyTitles = {
+  spiritual: "灵修",
+  sleep: "睡眠",
+  dream: "梦境",
+  body: "身体",
+  chores: "庶务",
+  movement: "运动",
+  inner: "内在与能量",
+  energy: "内在与能量",
+  awake: "清醒时间",
+  creation: "创造",
+  inspiration: "灵感",
+  relationship: "关系",
+  free: "自由记录",
+};
+
+const metricLabels = {
+  hours: "睡眠时长",
+  sleepHours: "睡眠时长",
+  napMinutes: "午睡/补觉",
+  sleepRecovery: "恢复感",
+  minutes: "运动时长",
+  movementMinutes: "运动时长",
+  km: "走路公里数",
+  walkKm: "走路公里数",
+};
+
+const metricUnits = {
+  hours: "小时",
+  sleepHours: "小时",
+  napMinutes: "分钟",
+  sleepRecovery: "/5",
+  minutes: "分钟",
+  movementMinutes: "分钟",
+  km: "公里",
+  walkKm: "公里",
+};
+
+const extraLabels = {
+  bedtimeActivity: "睡前活动",
+  sleepFactors: "影响睡眠的因素",
+};
+
 const $ = (selector) => document.querySelector(selector);
-const form = $("#log-form");
-const dateInput = $("#entry-date");
-const saveStatus = $("#save-status");
-const durationLabel = $("#duration-label");
+const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-let records = loadRecords();
-let currentDate = todayKey();
+let db = loadDatabase();
 let activeView = "today-view";
-let saveTimer = null;
-let interactionAt = Date.now();
-let durationTickAt = Date.now();
+let currentDate = getTodayKey();
+let selectedRecordDate = currentDate;
+let selectedRecordType = "all";
+let currentType = "free";
+let editingEntryId = null;
+let editingLeisureId = null;
+let lastTodayKey = currentDate;
+let lastTickAt = Date.now();
+let lastInteractionAt = Date.now();
 
-function todayKey() {
-  const now = new Date();
-  const tzOffset = now.getTimezoneOffset() * 60000;
-  return new Date(now.getTime() - tzOffset).toISOString().slice(0, 10);
-}
-
-function emptyRecord(date) {
+function createEmptyDb() {
   return {
-    date,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    durationMs: 0,
-    fields: {},
+    version: 4,
+    entries: [],
+    todosByDate: {},
+    leisureItems: [],
+    durationsByDate: {},
+    migratedLegacy: false,
   };
 }
 
-function loadRecords() {
+function loadDatabase() {
+  const empty = createEmptyDb();
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    if (Array.isArray(parsed)) {
-      return Object.fromEntries(parsed.filter((item) => item.date).map((item) => [item.date, normalizeRecord(item)]));
+    const saved = JSON.parse(localStorage.getItem(DB_KEY) || "null");
+    if (saved && saved.version === 4) {
+      return {
+        ...empty,
+        ...saved,
+        entries: Array.isArray(saved.entries) ? saved.entries : [],
+        todosByDate: saved.todosByDate || {},
+        leisureItems: Array.isArray(saved.leisureItems) ? saved.leisureItems : [],
+        durationsByDate: saved.durationsByDate || {},
+      };
     }
-    if (parsed && Array.isArray(parsed.records)) {
-      return Object.fromEntries(parsed.records.filter((item) => item.date).map((item) => [item.date, normalizeRecord(item)]));
-    }
-    return Object.fromEntries(Object.entries(parsed || {}).map(([date, record]) => [date, normalizeRecord({ ...record, date })]));
   } catch {
-    return {};
+    // Keep going and try legacy data.
+  }
+  migrateLegacyInto(empty);
+  saveDatabase(empty);
+  return empty;
+}
+
+function saveDatabase(nextDb = db) {
+  localStorage.setItem(DB_KEY, JSON.stringify(nextDb));
+}
+
+function migrateLegacyInto(target) {
+  for (const key of LEGACY_KEYS) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      migrateLegacyRecords(target, parsed);
+      target.migratedLegacy = true;
+      return;
+    } catch {
+      // Ignore malformed legacy backups.
+    }
   }
 }
 
-function normalizeRecord(record) {
-  const normalized = emptyRecord(record.date || todayKey());
-  normalized.createdAt = record.createdAt || normalized.createdAt;
-  normalized.updatedAt = record.updatedAt || normalized.updatedAt;
-  normalized.durationMs = Number(record.durationMs || record.recordingDurationMs || 0);
-  normalized.fields = record.fields || {};
-  if (normalized.fields.energy) {
-    const inner = normalized.fields.inner || { text: "", options: [], metrics: {} };
-    const energy = normalized.fields.energy || {};
-    const innerText = inner.text?.trim() || "";
-    const energyText = energy.text?.trim() || "";
-    if (energyText && !innerText.includes(energyText)) {
-      inner.text = innerText ? `${innerText}\n\n能量变化：${energyText}` : energyText;
+function migrateLegacyRecords(target, source) {
+  const records = extractLegacyRecords(source);
+  for (const record of records) {
+    if (!record.date) continue;
+    const fields = record.fields || {};
+    for (const [fieldId, rawValue] of Object.entries(fields)) {
+      if (fieldId === "memo") {
+        migrateTodos(target, record.date, rawValue);
+        continue;
+      }
+      const value = normalizeLegacyField(rawValue);
+      if (!hasLegacyContent(value)) continue;
+      const type = legacyMap[fieldId] || "free";
+      const heading = legacyTitles[fieldId] || findType(type).label;
+      const text = value.text ? value.text.trim() : "";
+      target.entries.push({
+        id: uid("entry"),
+        date: record.date,
+        type,
+        text: text || heading,
+        tags: value.options,
+        metrics: normalizeLegacyMetrics(value.metrics),
+        createdAt: record.createdAt || `${record.date}T09:00:00.000`,
+        updatedAt: record.updatedAt || record.createdAt || `${record.date}T09:00:00.000`,
+        migratedFrom: fieldId,
+      });
     }
-    normalized.fields.inner = inner;
-    delete normalized.fields.energy;
   }
-  for (const field of fields) {
-    if (typeof record[field.id] === "string") {
-      normalized.fields[field.id] = { text: record[field.id], options: [], metrics: {} };
-    }
+}
+
+function migrateTodos(target, date, rawValue) {
+  const value = normalizeLegacyField(rawValue);
+  const lines = value.text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean);
+  if (!lines.length) return;
+  if (!target.todosByDate[date]) target.todosByDate[date] = [];
+  for (const line of lines) {
+    target.todosByDate[date].push({
+      id: uid("todo"),
+      text: line,
+      done: false,
+      createdAt: `${date}T08:00:00.000`,
+      completedAt: null,
+    });
+  }
+}
+
+function extractLegacyRecords(source) {
+  if (Array.isArray(source)) return source;
+  if (Array.isArray(source.records)) return source.records;
+  if (source.records && typeof source.records === "object") {
+    return Object.entries(source.records).map(([date, record]) => ({ ...record, date: record.date || date }));
+  }
+  if (source && typeof source === "object") {
+    return Object.entries(source)
+      .filter(([, value]) => value && typeof value === "object")
+      .map(([date, record]) => ({ ...record, date: record.date || date }));
+  }
+  return [];
+}
+
+function normalizeLegacyField(value) {
+  if (typeof value === "string") return { text: value, options: [], metrics: {} };
+  return {
+    text: value?.text || "",
+    options: Array.isArray(value?.options) ? value.options : [],
+    metrics: value?.metrics || {},
+  };
+}
+
+function hasLegacyContent(value) {
+  return Boolean(value.text.trim() || value.options.length || Object.keys(value.metrics || {}).length);
+}
+
+function normalizeLegacyMetrics(metrics) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(metrics || {})) {
+    if (value === "" || value == null) continue;
+    if (key === "hours") normalized.sleepHours = value;
+    else if (key === "minutes") normalized.movementMinutes = value;
+    else if (key === "km") normalized.walkKm = value;
+    else normalized[key] = value;
   }
   return normalized;
 }
 
-function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+function uid(prefix) {
+  if (window.crypto && crypto.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function getCurrentRecord() {
-  if (!records[currentDate]) records[currentDate] = emptyRecord(currentDate);
-  return records[currentDate];
+function getTodayKey(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
-function renderIndex() {
-  $("#section-index").innerHTML = fields
-    .map((field) => `<a class="index-chip" href="#field-${field.id}">${field.title}</a>`)
-    .join("");
+function dateFromKey(dateKey) {
+  return new Date(`${dateKey}T12:00:00`);
 }
 
-function renderForm() {
-  const record = getCurrentRecord();
-  form.innerHTML = fields.map((field, index) => renderField(field, index + 1, record.fields[field.id] || {})).join("");
-  updateDurationLabel();
+function dateHash(dateKey) {
+  return [...dateKey].reduce((sum, char) => sum + char.charCodeAt(0), 0);
 }
 
-function renderField(field, number, value) {
-  const selected = new Set(value.options || []);
-  const metrics = value.metrics || {};
-  const options = field.options
-    ? `<div class="option-grid">${field.options
-        .map(
-          (option) => `
-            <label class="option-pill">
-              <input type="checkbox" data-field="${field.id}" data-kind="option" value="${escapeHtml(option)}" ${selected.has(option) ? "checked" : ""}>
-              <span>${escapeHtml(option)}</span>
-            </label>
-          `,
-        )
-        .join("")}</div>`
-    : "";
-  const metricFields = field.metrics
-    ? `<div class="metrics-row">${field.metrics
-        .map(
-          (metric) => `
-            <label class="metric-field">
-              <span>${metric.label}</span>
-              <input inputmode="decimal" type="number" min="0" step="${metric.step}" data-field="${field.id}" data-kind="metric" data-metric="${metric.id}" value="${escapeHtml(metrics[metric.id] || "")}" placeholder="${metric.suffix}">
-            </label>
-          `,
-        )
-        .join("")}</div>`
-    : "";
+function findType(typeId) {
+  return entryTypes.find((type) => type.id === typeId) || entryTypes[entryTypes.length - 1];
+}
 
-  return `
-    <section class="log-section" id="field-${field.id}">
-      <div class="section-head">
-        <h2>${field.title}</h2>
-        <span class="section-number">${String(number).padStart(2, "0")}</span>
-      </div>
-      <p class="prompt">${field.prompt}</p>
-      ${field.hint ? `<p class="hint">${field.hint}</p>` : ""}
-      ${options}
-      ${metricFields}
-      <textarea data-field="${field.id}" data-kind="text" placeholder="可以留空。">${escapeHtml(value.text || "")}</textarea>
-      <div class="section-jump">
-        <a class="jump-link" href="#top">顶部</a>
-        <a class="jump-link" href="#save-panel">底部</a>
-      </div>
-    </section>
-  `;
+function formatDateTitle(dateKey) {
+  return new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric" }).format(dateFromKey(dateKey));
+}
+
+function formatWeekday(dateKey) {
+  return new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(dateFromKey(dateKey));
+}
+
+function formatTime(iso) {
+  try {
+    return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  } catch {
+    return "";
+  }
 }
 
 function escapeHtml(value) {
@@ -234,163 +341,526 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function collectForm() {
-  const record = getCurrentRecord();
-  record.fields = {};
-  for (const field of fields) {
-    const text = form.querySelector(`[data-field="${field.id}"][data-kind="text"]`)?.value || "";
-    const options = [...form.querySelectorAll(`[data-field="${field.id}"][data-kind="option"]:checked`)].map((input) => input.value);
-    const metrics = {};
-    form.querySelectorAll(`[data-field="${field.id}"][data-kind="metric"]`).forEach((input) => {
-      if (input.value !== "") metrics[input.dataset.metric] = input.value;
-    });
-    record.fields[field.id] = { text, options, metrics };
-  }
-  record.updatedAt = new Date().toISOString();
-  records[currentDate] = record;
+function applyTheme(dateKey) {
+  const theme = dailyThemes[dateHash(dateKey) % dailyThemes.length];
+  const root = document.documentElement;
+  root.style.setProperty("--theme-a", theme.a);
+  root.style.setProperty("--theme-b", theme.b);
+  root.style.setProperty("--theme-c", theme.c);
+  root.style.setProperty("--theme-ink", theme.ink);
+  root.style.setProperty("--accent", theme.accent);
+  root.style.setProperty("--accent-strong", theme.strong);
 }
 
-function saveCurrent(status = "已保存今天的记录。") {
-  addActiveDuration();
-  collectForm();
-  persist();
-  renderHistory();
-  renderReview();
-  saveStatus.textContent = status;
-  updateDurationLabel();
+function getTodos(dateKey) {
+  if (!db.todosByDate[dateKey]) db.todosByDate[dateKey] = [];
+  return db.todosByDate[dateKey];
 }
 
-function scheduleSave() {
-  saveStatus.textContent = "正在暂存...";
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveCurrent("已自动暂存。"), 550);
-}
-
-function addActiveDuration() {
-  const now = Date.now();
-  const visible = document.visibilityState === "visible";
-  const recentlyActive = now - interactionAt < 120000;
-  if (visible && recentlyActive) {
-    const diff = Math.min(now - durationTickAt, 30000);
-    if (diff > 0) getCurrentRecord().durationMs = Number(getCurrentRecord().durationMs || 0) + diff;
-  }
-  durationTickAt = now;
+function getEntries(dateKey) {
+  return db.entries
+    .filter((entry) => entry.date === dateKey)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 }
 
 function markInteraction() {
-  interactionAt = Date.now();
+  lastInteractionAt = Date.now();
 }
 
-function updateDurationLabel() {
-  const minutes = Math.max(0, Math.round(Number(getCurrentRecord().durationMs || 0) / 60000));
-  durationLabel.textContent = `今日记录用时：${minutes} 分钟`;
+function trackDuration() {
+  const now = Date.now();
+  const visible = document.visibilityState === "visible";
+  const recentlyActive = now - lastInteractionAt < 120000;
+  if (visible && recentlyActive && activeView === "today-view") {
+    const diff = Math.min(now - lastTickAt, 30000);
+    db.durationsByDate[currentDate] = Number(db.durationsByDate[currentDate] || 0) + diff;
+    saveDatabase();
+  }
+  lastTickAt = now;
+  renderDuration();
 }
 
-function switchDate(date) {
-  saveCurrent("已保存当前日期的记录。");
-  currentDate = date;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ currentDate }));
-  dateInput.value = currentDate;
-  durationTickAt = Date.now();
-  renderForm();
-  saveStatus.textContent = "可以继续补充这一天。";
+function renderDuration() {
+  const minutes = Math.round(Number(db.durationsByDate[currentDate] || 0) / 60000);
+  $("#duration-label").textContent = `今日记录用时约 ${minutes} 分钟`;
 }
 
-function renderHistory() {
-  const list = $("#history-list");
-  const dates = Object.keys(records).sort().reverse();
-  if (!dates.length) {
-    list.innerHTML = `<div class="history-item"><p class="history-preview">还没有保存记录。</p></div>`;
+function updateEntryPlaceholder() {
+  const textarea = $("#entry-text");
+  if (!textarea) return;
+  textarea.placeholder = typePlaceholders[currentType] || typePlaceholders.free;
+}
+function renderTypeGrid() {
+  updateEntryPlaceholder();
+  $("#entry-type-grid").innerHTML = entryTypes
+    .map(
+      (type) => `
+        <button class="type-button ${type.id === currentType ? "active" : ""}" type="button" data-entry-type="${type.id}">
+          ${type.label}
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function renderDetailBox(entry = null) {
+  const details = typeDetails[currentType];
+  const selected = new Set(entry?.tags || []);
+  const metrics = entry?.metrics || {};
+  const extras = entry?.extras || {};
+  if (!details) {
+    $("#entry-detail-box").innerHTML = "";
     return;
   }
-  list.innerHTML = dates
-    .map((date) => {
-      const record = records[date];
-      const preview = fields.map((field) => record.fields?.[field.id]?.text).find(Boolean) || "这一天有一些安静的留白。";
+  const help = details.help ? `<p class="detail-help">${details.help}</p>` : "";
+  const options = details.options
+    ? `<div class="choice-grid">${details.options
+        .map(
+          (option) => `
+            <label class="choice-pill ${selected.has(option) ? "active" : ""}">
+              <input type="checkbox" value="${escapeHtml(option)}" ${selected.has(option) ? "checked" : ""}>
+              <span>${escapeHtml(option)}</span>
+            </label>
+          `,
+        )
+        .join("")}</div>`
+    : "";
+  const metricInputs = details.metrics
+    ? `<div class="metric-grid">${details.metrics
+        .map(
+          (metric) => `
+            <label>
+              <span>${metric.label}</span>
+              <input type="number" inputmode="decimal" min="${metric.min || "0"}" ${metric.max ? 'max="' + metric.max + '"' : ""} step="${metric.step}" data-metric="${metric.id}" value="${escapeHtml(metrics[metric.id] || "")}" placeholder="${metric.unit}">
+            </label>
+          `,
+        )
+        .join("")}</div>`
+    : "";
+  const extraInputs = details.extras
+    ? `<div class="extra-grid">${details.extras
+        .map(
+          (extra) => `
+            <label>
+              <span>${extra.label}</span>
+              <textarea data-extra="${extra.id}" placeholder="${escapeHtml(extra.placeholder || "")}">${escapeHtml(extras[extra.id] || "")}</textarea>
+            </label>
+          `,
+        )
+        .join("")}</div>`
+    : "";
+  $("#entry-detail-box").innerHTML = `${help}${options}${metricInputs}${extraInputs}`;
+}
+
+function renderToday() {
+  applyTheme(currentDate);
+  const today = getTodayKey();
+  $("#date-label").textContent = formatDateTitle(currentDate);
+  $("#weekday-label").textContent = currentDate === today ? `今天 · ${formatWeekday(currentDate)}` : `${formatWeekday(currentDate)} · 历史`;
+  $("#daily-line").textContent = dailyLines[dateHash(currentDate) % dailyLines.length];
+  $("#jump-today-button").hidden = currentDate === today;
+  renderHistoryNotice();
+  renderTodos();
+  renderEntryList("#today-entry-list", getEntries(currentDate));
+  $("#entry-count").textContent = `${getEntries(currentDate).length} 条`;
+  renderDuration();
+}
+
+function renderHistoryNotice(message = "") {
+  const notice = $("#history-notice");
+  const today = getTodayKey();
+  if (message) {
+    notice.hidden = false;
+    notice.textContent = message;
+    return;
+  }
+  if (currentDate !== today) {
+    notice.hidden = false;
+    notice.textContent = `正在查看 ${currentDate} 的历史记录。点“回到今天”会回到 ${today}。`;
+  } else {
+    notice.hidden = true;
+    notice.textContent = "";
+  }
+}
+
+function renderTodos() {
+  const todos = getTodos(currentDate);
+  const done = todos.filter((todo) => todo.done).length;
+  $("#todo-count").textContent = `${done}/${todos.length}`;
+  $("#todo-list").innerHTML = todos.length
+    ? todos
+        .map(
+          (todo) => `
+            <div class="todo-item" data-todo-id="${todo.id}">
+              <input type="checkbox" ${todo.done ? "checked" : ""} aria-label="完成 ${escapeHtml(todo.text)}">
+              <span class="todo-text ${todo.done ? "done" : ""}">${escapeHtml(todo.text)}</span>
+              <button class="icon-button" type="button" data-delete-todo="${todo.id}" aria-label="删除">×</button>
+            </div>
+          `,
+        )
+        .join("")
+    : `<p class="empty-state">这里可以放今天要托住的小事。没有也很好。</p>`;
+}
+
+function collectEntryDetails() {
+  const tags = $$("#entry-detail-box input[type='checkbox']:checked").map((input) => input.value);
+  const metrics = {};
+  $$("#entry-detail-box [data-metric]").forEach((input) => {
+    if (input.value !== "") metrics[input.dataset.metric] = input.value;
+  });
+  const extras = {};
+  $$("#entry-detail-box [data-extra]").forEach((input) => {
+    const value = input.value.trim();
+    if (value) extras[input.dataset.extra] = value;
+  });
+  return { tags, metrics, extras };
+}
+
+function resetEntryForm() {
+  editingEntryId = null;
+  currentType = "free";
+  $("#entry-text").value = "";
+  $("#entry-submit-button").textContent = "保存这一条";
+  $("#cancel-edit-button").hidden = true;
+  renderTypeGrid();
+  renderDetailBox();
+}
+
+function submitEntry(event) {
+  event.preventDefault();
+  markInteraction();
+  const text = $("#entry-text").value.trim();
+  const { tags, metrics, extras } = collectEntryDetails();
+  const hasDetails = tags.length || Object.keys(metrics).length || Object.keys(extras).length;
+  if (!text && !hasDetails) {
+    $("#save-status").textContent = "可以先写一点，或者选择一个小标签。";
+    return;
+  }
+
+  const now = new Date().toISOString();
+  if (editingEntryId) {
+    const entry = db.entries.find((item) => item.id === editingEntryId);
+    if (entry) {
+      entry.type = currentType;
+      entry.text = text;
+      entry.tags = tags;
+      entry.metrics = metrics;
+      entry.extras = extras;
+      entry.updatedAt = now;
+      entry.date = currentDate;
+    }
+    $("#save-status").textContent = "这一条已更新。";
+  } else {
+    db.entries.push({
+      id: uid("entry"),
+      date: currentDate,
+      type: currentType,
+      text,
+      tags,
+      metrics,
+      extras,
+      createdAt: now,
+      updatedAt: now,
+    });
+    $("#save-status").textContent = "已保存这一条。";
+  }
+  saveDatabase();
+  resetEntryForm();
+  renderAll();
+}
+
+function renderEntryList(selector, entries) {
+  const container = $(selector);
+  if (!entries.length) {
+    container.innerHTML = `<article class="entry-card"><p class="empty-state">还没有记录。生活不需要被填满，想到什么再放进来。</p></article>`;
+    return;
+  }
+  container.innerHTML = entries
+    .map((entry) => {
+      const type = findType(entry.type);
+      const detail = renderEntryDetail(entry);
       return `
-        <button class="history-item" type="button" data-open-date="${date}">
-          <div class="history-date">${date}</div>
-          <div class="history-preview">${escapeHtml(preview.slice(0, 88))}</div>
-        </button>
+        <article class="entry-card" data-entry-id="${entry.id}">
+          <div class="entry-meta">
+            <span class="type-badge">${type.label}</span>
+            <span class="time-text">${entry.date} · ${formatTime(entry.createdAt)}</span>
+          </div>
+          ${entry.text ? `<p>${escapeHtml(entry.text)}</p>` : ""}
+          ${detail}
+          <div class="card-actions">
+            <button class="mini-button" type="button" data-open-entry="${entry.id}">打开这天</button>
+            <button class="mini-button" type="button" data-edit-entry="${entry.id}">编辑</button>
+            <button class="danger-button" type="button" data-delete-entry="${entry.id}">删除</button>
+          </div>
+        </article>
       `;
     })
     .join("");
 }
 
-function recentRecords() {
-  const today = todayKey();
-  return Object.values(records)
-    .filter((record) => record.date <= today)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 7)
-    .reverse();
-}
-
-function hasField(record, id) {
-  const field = record.fields?.[id];
-  return Boolean(field && ((field.text || "").trim() || field.options?.length || Object.keys(field.metrics || {}).length));
-}
-
-function optionCounts(items, id) {
-  const counts = {};
-  for (const record of items) {
-    for (const option of record.fields?.[id]?.options || []) {
-      counts[option] = (counts[option] || 0) + 1;
-    }
+function renderEntryDetail(entry) {
+  const chips = [];
+  for (const tag of entry.tags || []) chips.push(`<span class="data-chip">${escapeHtml(tag)}</span>`);
+  for (const [key, value] of Object.entries(entry.metrics || {})) {
+    chips.push(`<span class="data-chip">${metricLabels[key] || key} ${escapeHtml(value)}${metricUnits[key] || ""}</span>`);
   }
-  return counts;
+  const extraLines = Object.entries(entry.extras || {})
+    .filter(([, value]) => value)
+    .map(([key, value]) => `<p class="extra-line"><strong>${extraLabels[key] || key}：</strong>${escapeHtml(value)}</p>`);
+  const chipHtml = chips.length ? `<div class="entry-meta">${chips.join("")}</div>` : "";
+  const extraHtml = extraLines.length ? `<div class="extra-lines">${extraLines.join("")}</div>` : "";
+  return `${chipHtml}${extraHtml}`;
 }
 
-function metricSum(items, id, metric) {
-  return items.reduce((sum, record) => sum + Number(record.fields?.[id]?.metrics?.[metric] || 0), 0);
+function editEntry(entryId) {
+  const entry = db.entries.find((item) => item.id === entryId);
+  if (!entry) return;
+  currentDate = entry.date;
+  activeView = "today-view";
+  currentType = entry.type;
+  editingEntryId = entry.id;
+  $("#entry-text").value = entry.text || "";
+  $("#entry-submit-button").textContent = "更新这一条";
+  $("#cancel-edit-button").hidden = false;
+  renderTypeGrid();
+  renderDetailBox(entry);
+  switchView("today-view", { keepDate: true, keepEditing: true });
+  setTimeout(() => $("#entry-text").focus(), 0);
 }
 
-function textSnippets(items, ids, limit = 4) {
-  const snippets = [];
-  for (const record of items) {
-    for (const id of ids) {
-      const text = record.fields?.[id]?.text?.trim();
-      if (text) snippets.push(`${record.date}：${text}`);
-    }
+function deleteEntry(entryId) {
+  db.entries = db.entries.filter((entry) => entry.id !== entryId);
+  saveDatabase();
+  renderAll();
+}
+
+function openEntryDate(entryId) {
+  const entry = db.entries.find((item) => item.id === entryId);
+  if (!entry) return;
+  currentDate = entry.date;
+  switchView("today-view", { keepDate: true });
+}
+
+function renderRecords() {
+  $("#record-date-input").value = selectedRecordDate;
+  $("#record-type-filter").innerHTML = `<option value="all">全部类型</option>${entryTypes
+    .map((type) => `<option value="${type.id}">${type.label}</option>`)
+    .join("")}`;
+  $("#record-type-filter").value = selectedRecordType;
+  const entries = getEntries(selectedRecordDate).filter((entry) => selectedRecordType === "all" || entry.type === selectedRecordType);
+  renderEntryList("#record-entry-list", entries);
+}
+
+function addTodo(event) {
+  event.preventDefault();
+  const input = $("#todo-input");
+  const text = input.value.trim();
+  if (!text) return;
+  getTodos(currentDate).push({
+    id: uid("todo"),
+    text,
+    done: false,
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+  });
+  input.value = "";
+  saveDatabase();
+  renderTodos();
+}
+
+function toggleTodo(todoId, done) {
+  const todo = getTodos(currentDate).find((item) => item.id === todoId);
+  if (!todo) return;
+  todo.done = done;
+  todo.completedAt = done ? new Date().toISOString() : null;
+  saveDatabase();
+  renderTodos();
+}
+
+function deleteTodo(todoId) {
+  db.todosByDate[currentDate] = getTodos(currentDate).filter((todo) => todo.id !== todoId);
+  saveDatabase();
+  renderTodos();
+}
+
+function renderLeisure() {
+  $("#leisure-count").textContent = `${db.leisureItems.length} 个`;
+  const items = [...db.leisureItems].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  $("#leisure-list").innerHTML = items.length
+    ? items.map(renderLeisureCard).join("")
+    : `<article class="leisure-card"><p class="empty-state">还没有闲暇条目。下一次想起一部剧、一本书、一个综艺，就先放这里。</p></article>`;
+}
+
+function renderLeisureCard(item) {
+  return `
+    <article class="leisure-card" data-leisure-id="${item.id}">
+      <div class="leisure-meta">
+        <span class="type-badge">${leisureLabels.kind[item.kind] || "其他"}</span>
+        <span class="data-chip">${leisureLabels.status[item.status] || item.status}</span>
+        <span class="data-chip">${leisureLabels.context[item.context] || item.context}</span>
+        <span class="data-chip">${leisureLabels.feeling[item.feeling] || item.feeling}</span>
+      </div>
+      <h3>${escapeHtml(item.title)}</h3>
+      ${item.progress ? `<p>进度：${escapeHtml(item.progress)}</p>` : ""}
+      ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}
+      <div class="card-actions">
+        <button class="mini-button" type="button" data-log-leisure="${item.id}">记到今天</button>
+        <button class="mini-button" type="button" data-edit-leisure="${item.id}">编辑</button>
+        <button class="danger-button" type="button" data-delete-leisure="${item.id}">删除</button>
+      </div>
+    </article>
+  `;
+}
+
+function submitLeisure(event) {
+  event.preventDefault();
+  const title = $("#leisure-title").value.trim();
+  if (!title) return;
+  const now = new Date().toISOString();
+  const item = {
+    id: editingLeisureId || uid("leisure"),
+    title,
+    kind: $("#leisure-kind").value,
+    status: $("#leisure-status").value,
+    progress: $("#leisure-progress").value.trim(),
+    context: $("#leisure-context").value,
+    feeling: $("#leisure-feeling").value,
+    note: $("#leisure-note").value.trim(),
+    createdAt: now,
+    updatedAt: now,
+  };
+  if (editingLeisureId) {
+    const index = db.leisureItems.findIndex((existing) => existing.id === editingLeisureId);
+    if (index >= 0) item.createdAt = db.leisureItems[index].createdAt || now;
+    if (index >= 0) db.leisureItems[index] = item;
+  } else {
+    db.leisureItems.push(item);
   }
-  return snippets.slice(0, limit);
+  saveDatabase();
+  resetLeisureForm();
+  renderLeisure();
+  renderReview();
+}
+
+function resetLeisureForm() {
+  editingLeisureId = null;
+  $("#leisure-form").reset();
+  $("#leisure-form-title").textContent = "添加一个闲暇条目";
+  $("#leisure-submit-button").textContent = "保存闲暇条目";
+  $("#cancel-leisure-edit").hidden = true;
+}
+
+function editLeisure(itemId) {
+  const item = db.leisureItems.find((leisure) => leisure.id === itemId);
+  if (!item) return;
+  editingLeisureId = item.id;
+  $("#leisure-title").value = item.title || "";
+  $("#leisure-kind").value = item.kind || "other";
+  $("#leisure-status").value = item.status || "want";
+  $("#leisure-progress").value = item.progress || "";
+  $("#leisure-context").value = item.context || "bored";
+  $("#leisure-feeling").value = item.feeling || "plain";
+  $("#leisure-note").value = item.note || "";
+  $("#leisure-form-title").textContent = "编辑闲暇条目";
+  $("#leisure-submit-button").textContent = "更新闲暇条目";
+  $("#cancel-leisure-edit").hidden = false;
+  $("#leisure-title").focus();
+}
+
+function deleteLeisure(itemId) {
+  db.leisureItems = db.leisureItems.filter((item) => item.id !== itemId);
+  saveDatabase();
+  renderLeisure();
+  renderReview();
+}
+
+function logLeisureToToday(itemId) {
+  const item = db.leisureItems.find((leisure) => leisure.id === itemId);
+  if (!item) return;
+  currentDate = getTodayKey();
+  db.entries.push({
+    id: uid("entry"),
+    date: currentDate,
+    type: "leisure",
+    text: `${item.title}${item.progress ? `：${item.progress}` : ""}${item.note ? `\n${item.note}` : ""}`,
+    tags: [leisureLabels.kind[item.kind], leisureLabels.feeling[item.feeling]].filter(Boolean),
+    metrics: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  saveDatabase();
+  switchView("today-view");
+  $("#save-status").textContent = "已记到今天的生活流。";
+}
+
+function showBoredSuggestions() {
+  const candidates = db.leisureItems
+    .filter((item) => !["finished", "dropped"].includes(item.status))
+    .map((item) => ({ item, score: leisureScore(item) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ item }) => item);
+  const box = $("#bored-result");
+  box.hidden = false;
+  if (!candidates.length) {
+    box.innerHTML = `<p>现在还没有可选项。可以先放进一部剧、一本书，或者也允许自己真正休息。</p>`;
+    return;
+  }
+  box.innerHTML = `
+    <p>可以从这几个里面选一个，不需要临时刷半小时来找：</p>
+    <ul>
+      ${candidates
+        .map(
+          (item) =>
+            `<li>${escapeHtml(item.title)} · ${leisureLabels.status[item.status]} · ${item.progress ? escapeHtml(item.progress) : leisureLabels.context[item.context]}</li>`,
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+function leisureScore(item) {
+  let score = 0;
+  if (item.status === "watching") score += 5;
+  if (item.status === "want") score += 3;
+  if (item.context === "bored") score += 3;
+  if (item.context === "low-energy") score += 2;
+  if (["nourishing", "company"].includes(item.feeling)) score += 2;
+  if (item.feeling === "draining") score -= 3;
+  return score;
+}
+
+function lastNDates(n) {
+  const dates = [];
+  const base = dateFromKey(getTodayKey());
+  for (let i = n - 1; i >= 0; i -= 1) {
+    const next = new Date(base);
+    next.setDate(base.getDate() - i);
+    dates.push(getTodayKey(next));
+  }
+  return dates;
 }
 
 function renderReview() {
-  const items = recentRecords();
-  const container = $("#review-content");
-  if (items.length < 2) {
-    container.innerHTML = `
-      <article class="review-card">
-        <h3>本周记录还不多</h3>
-        <p>可以先继续记录，不需要急着总结。等有两三天内容后，复盘会更有参考。</p>
-      </article>
-    `;
-    return;
+  const dates = lastNDates(7);
+  const weekEntries = db.entries.filter((entry) => dates.includes(entry.date));
+  const daysWithRecords = new Set(weekEntries.map((entry) => entry.date));
+  const cards = [];
+  if (daysWithRecords.size < 2) {
+    cards.push(reviewCard("本周记录还不多", ["可以先继续记录，不需要急着总结。等有两三天内容后，复盘会更有参考。"]));
   }
-
-  const spiritualDays = items.filter((record) => hasField(record, "spiritual")).length;
-  const movementDays = items.filter((record) => hasField(record, "movement")).length;
-  const movementMinutes = metricSum(items, "movement", "minutes");
-  const walkKm = metricSum(items, "movement", "km");
-  const chores = optionCounts(items, "chores");
-  const movement = optionCounts(items, "movement");
-  const sleepHours = items.map((record) => Number(record.fields?.sleep?.metrics?.hours || 0)).filter(Boolean);
-  const avgSleep = sleepHours.length ? (sleepHours.reduce((a, b) => a + b, 0) / sleepHours.length).toFixed(1) : "";
-  const awakeCounts = optionCounts(items, "awake");
-
-  container.innerHTML = `
-    ${reviewCard("记录概况", [`本周记录 ${items.length} 天。`, avgSleep ? `有 ${sleepHours.length} 天记录了睡眠，平均约 ${avgSleep} 小时。` : "睡眠还没有形成可统计数据。"])}
-    ${reviewCard("灵修", [`灵修相关记录 ${spiritualDays} 天。`, ...textSnippets(items, ["spiritual"], 2)])}
-    ${reviewCard("运动", [`运动相关记录 ${movementDays} 天，总时长约 ${movementMinutes || 0} 分钟。`, walkKm ? `散步/走路记录约 ${walkKm.toFixed(1)} 公里。` : "走路公里数暂时不多。", formatCounts(movement)])}
-    ${reviewCard("庶务", [formatCounts(chores) || "洗澡、洗衣、排便、自我按摩还可以继续轻量记录。"])}
-    ${reviewCard("身体与睡眠", [...textSnippets(items, ["body", "sleep"], 4)])}
-    ${reviewCard("内在与能量", [...textSnippets(items, ["inner"], 4)])}
-    ${reviewCard("清醒时间", [formatCounts(awakeCounts) || "还看不出明显流向。可以继续观察学习、兴趣项目、娱乐、购物、社交对状态的影响。"])}
-    ${reviewCard("创造与灵感", [...textSnippets(items, ["creation", "inspiration"], 4)])}
-    ${reviewCard("关系", [...textSnippets(items, ["relationship"], 3)])}
-    ${reviewCard("下周温和小行动", suggestActions(items, movementDays, spiritualDays, chores))}
-  `;
+  cards.push(reviewCard("记录概况", [`最近 7 天记录了 ${daysWithRecords.size} 天，共 ${weekEntries.length} 条生活流。`, `to-dos 共 ${countTodos(dates)} 条，完成 ${countDoneTodos(dates)} 条。`]));
+  cards.push(reviewCard("睡眠", sleepReview(weekEntries)));
+  cards.push(reviewCard("身体与梦境", [...snippets(weekEntries, ["body", "dream"], 4)]));
+  cards.push(reviewCard("灵修", spiritualReview(weekEntries)));
+  cards.push(reviewCard("庶务", choresReview(weekEntries)));
+  cards.push(reviewCard("运动", movementReview(weekEntries)));
+  cards.push(reviewCard("关系", snippets(weekEntries, ["relationship"], 4)));
+  cards.push(reviewCard("内在与能量", snippets(weekEntries, ["inner"], 4)));
+  cards.push(reviewCard("创造与灵感", snippets(weekEntries, ["creation", "inspiration"], 4)));
+  cards.push(reviewCard("闲暇", leisureReview(weekEntries)));
+  cards.push(reviewCard("下周温和小行动", suggestActions(weekEntries)));
+  $("#review-content").innerHTML = cards.join("");
 }
 
 function reviewCard(title, lines) {
@@ -403,56 +873,180 @@ function reviewCard(title, lines) {
   `;
 }
 
-function formatCounts(counts) {
-  const parts = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([key, count]) => `${key} ${count} 次`);
-  return parts.join("，");
+function entriesOf(entries, type) {
+  return entries.filter((entry) => entry.type === type);
 }
 
-function suggestActions(items, movementDays, spiritualDays, chores) {
+function uniqueDays(entries) {
+  return new Set(entries.map((entry) => entry.date)).size;
+}
+
+function countTags(entries) {
+  const counts = {};
+  for (const entry of entries) {
+    for (const tag of entry.tags || []) counts[tag] = (counts[tag] || 0) + 1;
+  }
+  return counts;
+}
+
+function formatCounts(counts) {
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => `${label} ${count} 次`)
+    .join("，");
+}
+
+function sumMetric(entries, metric) {
+  return entries.reduce((sum, entry) => sum + Number(entry.metrics?.[metric] || 0), 0);
+}
+
+function sleepReview(entries) {
+  const sleep = entriesOf(entries, "sleep");
+  if (!sleep.length) return ["本周还没有睡眠记录。可以先轻量记录 2-3 天，不急着总结。"];
+
+  const hours = sleep.map((entry) => Number(entry.metrics?.sleepHours || 0)).filter(Boolean);
+  const avg = hours.length ? (hours.reduce((a, b) => a + b, 0) / hours.length).toFixed(1) : "";
+  const napEntries = sleep.filter((entry) => Number(entry.metrics?.napMinutes || 0) > 0 || entry.tags?.includes("午睡/补觉") || entry.tags?.includes("午休/补觉"));
+  const napTotal = sumMetric(sleep, "napMinutes");
+  const recoveries = sleep.map((entry) => Number(entry.metrics?.sleepRecovery || 0)).filter((value) => value >= 1);
+  const avgRecovery = recoveries.length ? (recoveries.reduce((a, b) => a + b, 0) / recoveries.length).toFixed(1) : "";
+  const tags = countTags(sleep);
+  const signalLabels = ["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适"];
+  const signalText = signalLabels.filter((label) => tags[label]).map((label) => `${label} ${tags[label]} 次`).join("，");
+  const lines = [
+    `睡眠记录 ${sleep.length} 条，覆盖 ${uniqueDays(sleep)} 天。`,
+    avg ? `记录睡眠时长的 ${hours.length} 天里，平均约 ${avg} 小时。` : "",
+    napEntries.length ? `午睡/补觉 ${napEntries.length} 次，总时长约 ${napTotal || 0} 分钟。` : "",
+    avgRecovery ? `平均恢复感约 ${avgRecovery}/5。` : "",
+    signalText ? `本周出现：${signalText}。` : "",
+  ];
+  if ((tags["环境噪音"] || 0) + (tags["鸟叫"] || 0) >= 2) {
+    lines.push("环境干扰出现较多，可以继续观察耳塞、窗户、白噪音或入睡时间是否有帮助。");
+  }
+  if ((tags["入睡困难"] || 0) + (tags["躺下但没睡意"] || 0) >= 2) {
+    lines.push("入睡前状态值得继续观察，尤其是睡前活动、屏幕、聊天、压力和身体疲劳之间的关系。");
+  }
+  return lines;
+}
+
+function spiritualReview(entries) {
+  const spiritual = entriesOf(entries, "spiritual");
+  const tags = formatCounts(countTags(spiritual));
+  return [`灵修相关记录 ${uniqueDays(spiritual)} 天。`, tags ? `本周出现：${tags}。` : "", ...snippets(entries, ["spiritual"], 2)];
+}
+
+function choresReview(entries) {
+  const chores = entriesOf(entries, "chores");
+  const counts = formatCounts(countTags(chores));
+  return [counts || "洗澡、洗衣、排便、自我按摩还没有形成可统计记录。"];
+}
+
+function movementReview(entries) {
+  const movement = entriesOf(entries, "movement");
+  const minutes = sumMetric(movement, "movementMinutes");
+  const km = sumMetric(movement, "walkKm");
+  const counts = formatCounts(countTags(movement));
+  return [
+    `运动记录 ${movement.length} 条，覆盖 ${uniqueDays(movement)} 天。`,
+    minutes ? `总运动时长约 ${minutes} 分钟。` : "",
+    km ? `散步/走路约 ${km.toFixed(1)} 公里。` : "",
+    counts ? `项目分布：${counts}。` : "",
+  ];
+}
+
+function leisureReview(entries) {
+  const leisureEntries = entriesOf(entries, "leisure");
+  const active = db.leisureItems.filter((item) => ["want", "watching", "paused"].includes(item.status));
+  const finished = db.leisureItems.filter((item) => item.status === "finished");
+  return [
+    `生活流里有 ${leisureEntries.length} 条闲暇记录。`,
+    active.length ? `当前清单里有 ${active.length} 个可继续的闲暇条目。` : "闲暇清单还不多，可以先放 2-3 个低成本选择。",
+    finished.length ? `已看完/读完 ${finished.length} 个。` : "",
+    ...active.slice(0, 3).map((item) => `${item.title}：${leisureLabels.status[item.status]}${item.progress ? `，${item.progress}` : ""}`),
+  ];
+}
+
+function snippets(entries, types, limit = 4) {
+  return entries
+    .filter((entry) => types.includes(entry.type) && entry.text)
+    .slice(-limit)
+    .map((entry) => `${entry.date}：${entry.text.slice(0, 90)}`);
+}
+
+function countTodos(dates) {
+  return dates.reduce((sum, date) => sum + getTodos(date).length, 0);
+}
+
+function countDoneTodos(dates) {
+  return dates.reduce((sum, date) => sum + getTodos(date).filter((todo) => todo.done).length, 0);
+}
+
+function suggestActions(entries) {
   const actions = [];
-  if (spiritualDays < 3) actions.push("选一个很小的灵修入口，例如只读一小段或安静祷告两分钟。");
-  if (movementDays < 3) actions.push("给身体一个低门槛动作：八段锦、拉伸或走路 10 分钟都算。");
-  if (!chores["洗澡"] || !chores["排便"]) actions.push("把洗澡、排便这类基础照料先托住，不追求完美。");
-  if (!items.some((record) => hasField(record, "creation"))) actions.push("保留一个小产出：一句话、一个问题、一个片段都可以。");
+  if (!entriesOf(entries, "spiritual").length) actions.push("给灵修留一个很小的入口：祷告两分钟或读一小段都算。");
+  if (uniqueDays(entriesOf(entries, "movement")) < 3) actions.push("给身体一个低门槛动作：八段锦、拉伸或走路 10 分钟。");
+  if (!entriesOf(entries, "chores").some((entry) => entry.tags?.includes("排便"))) actions.push("庶务里继续轻量记录排便和洗澡，先观察规律。");
+  if (!db.leisureItems.length) actions.push("放 2-3 个闲暇条目，给无聊时刻一个更有边界的选择。");
+  if (!actions.length) actions.push("继续保持现在这种轻量记录，不需要把生活写满。");
   return actions.slice(0, 3);
 }
 
-function switchView(viewId) {
-  activeView = viewId;
-  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
-  document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.view === viewId));
-  if (viewId === "history-view") renderHistory();
-  if (viewId === "review-view") renderReview();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
 function exportJson() {
-  download(`life-log-backup-${todayKey()}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), records }, null, 2), "application/json");
+  download(`life-log-backup-${getTodayKey()}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), ...db }, null, 2), "application/json;charset=utf-8");
 }
 
 function exportMarkdown() {
-  const content = Object.values(records)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((record) => {
-      const sections = fields
-        .map((field) => {
-          const value = record.fields?.[field.id] || {};
-          const optionText = value.options?.length ? `\n选项：${value.options.join("，")}` : "";
-          const metricText = value.metrics && Object.keys(value.metrics).length ? `\n数据：${Object.entries(value.metrics).map(([k, v]) => `${k} ${v}`).join("，")}` : "";
-          const text = value.text?.trim() || "";
-          return `### ${field.title}${optionText}${metricText}\n${text}`;
-        })
-        .join("\n\n");
-      return `# ${record.date}\n\n${sections}\n`;
-    })
-    .join("\n---\n\n");
-  download(`life-log-${todayKey()}.md`, content, "text/markdown");
+  const dates = [...new Set([...db.entries.map((entry) => entry.date), ...Object.keys(db.todosByDate)])].sort();
+  const sections = dates.map(markdownForDate).filter(Boolean);
+  if (db.leisureItems.length) sections.push(markdownForLeisure());
+  download(`life-log-${getTodayKey()}.md`, sections.join("\n\n---\n\n"), "text/markdown;charset=utf-8", true);
 }
 
-function download(filename, content, type) {
-  const blob = new Blob([content], { type });
+function markdownForDate(date) {
+  const parts = [`# ${date}`];
+  const todos = getTodos(date);
+  if (todos.length) {
+    parts.push(`## to-dos\n${todos.map((todo) => `- [${todo.done ? "x" : " "}] ${todo.text}`).join("\n")}`);
+  }
+  for (const entry of getEntries(date)) {
+    const type = findType(entry.type).label;
+    const meta = [];
+    if (entry.tags?.length) meta.push(`选项：${entry.tags.join("，")}`);
+    const metricText = formatMetricText(entry.metrics);
+    if (metricText) meta.push(`数据：${metricText}`);
+    const extrasText = formatExtrasText(entry.extras);
+    if (extrasText) meta.push(extrasText);
+    parts.push(`## ${type} · ${formatTime(entry.createdAt)}\n${meta.join("\n")}${meta.length ? "\n" : ""}${entry.text || ""}`.trim());
+  }
+  return parts.length > 1 ? parts.join("\n\n") : "";
+}
+
+function markdownForLeisure() {
+  const lines = ["# 闲暇清单"];
+  for (const item of db.leisureItems) {
+    lines.push(
+      `## ${item.title}\n类型：${leisureLabels.kind[item.kind] || item.kind}\n状态：${leisureLabels.status[item.status] || item.status}\n进度：${item.progress || "未填写"}\n适合：${leisureLabels.context[item.context] || item.context}\n感受：${leisureLabels.feeling[item.feeling] || item.feeling}\n${item.note || ""}`.trim(),
+    );
+  }
+  return lines.join("\n\n");
+}
+
+function formatMetricText(metrics = {}) {
+  return Object.entries(metrics)
+    .filter(([, value]) => value !== "" && value != null)
+    .map(([key, value]) => `${metricLabels[key] || key} ${value}${metricUnits[key] || ""}`)
+    .join("，");
+}
+
+function formatExtrasText(extras = {}) {
+  return Object.entries(extras)
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${extraLabels[key] || key}：${value}`)
+    .join("\n");
+}
+function download(filename, content, type, withBom = false) {
+  const body = withBom ? `\ufeff${content}` : content;
+  const blob = new Blob([body], { type });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -467,15 +1061,17 @@ function importBackup(file) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(reader.result);
-      const incoming = Array.isArray(parsed.records) ? parsed.records : Array.isArray(parsed) ? parsed : Object.values(parsed.records || parsed);
-      for (const item of incoming) {
-        if (item?.date) records[item.date] = normalizeRecord(item);
+      if (parsed.version === 4 || parsed.entries || parsed.leisureItems) {
+        db.entries = mergeById(db.entries, parsed.entries || []);
+        db.leisureItems = mergeById(db.leisureItems, parsed.leisureItems || []);
+        db.todosByDate = { ...db.todosByDate, ...(parsed.todosByDate || {}) };
+        db.durationsByDate = { ...db.durationsByDate, ...(parsed.durationsByDate || {}) };
+      } else {
+        migrateLegacyRecords(db, parsed);
       }
-      persist();
-      renderHistory();
-      renderReview();
-      saveStatus.textContent = "备份已导入。";
-      switchView("today-view");
+      saveDatabase();
+      renderAll();
+      alert("备份已导入。");
     } catch {
       alert("导入失败：这个文件不像 Life Log 备份。");
     }
@@ -483,71 +1079,153 @@ function importBackup(file) {
   reader.readAsText(file);
 }
 
+function mergeById(existing, incoming) {
+  const map = new Map(existing.map((item) => [item.id, item]));
+  for (const item of incoming) {
+    if (item?.id) map.set(item.id, item);
+  }
+  return [...map.values()];
+}
+
+function switchView(viewId, options = {}) {
+  activeView = viewId;
+  if (viewId === "today-view" && !options.keepDate) currentDate = getTodayKey();
+  if (!options.keepEditing) resetEntryForm();
+  $$(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
+  $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.view === viewId));
+  renderAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderAll() {
+  renderToday();
+  renderRecords();
+  renderLeisure();
+  renderReview();
+}
+
+function checkDateRoll() {
+  const today = getTodayKey();
+  if (today === lastTodayKey) return;
+  const previousToday = lastTodayKey;
+  lastTodayKey = today;
+  const hasDraft = $("#entry-text") && $("#entry-text").value.trim();
+  if (activeView === "today-view" && currentDate === previousToday && !editingEntryId && !hasDraft) {
+    currentDate = today;
+    renderAll();
+    $("#save-status").textContent = "新的一天已经开始，已自动切到今天。";
+  } else {
+    renderHistoryNotice(`今天已经是 ${today}。你当前内容不会被移动；需要时点“回到今天”。`);
+  }
+}
+
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((registration) => {
-    registration.update();
-    if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
-  });
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!sessionStorage.getItem("life-log-reloaded")) {
-      sessionStorage.setItem("life-log-reloaded", "1");
-      window.location.reload();
-    }
-  });
+  navigator.serviceWorker
+    .register("./sw.js", { updateViaCache: "none" })
+    .then((registration) => {
+      registration.update();
+      if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    })
+    .catch(() => {});
 }
 
 function bindEvents() {
-  form.addEventListener("input", () => {
-    markInteraction();
-    scheduleSave();
-  });
-  form.addEventListener("change", () => {
-    markInteraction();
-    scheduleSave();
-  });
   document.addEventListener("click", markInteraction);
+  document.addEventListener("input", markInteraction);
   document.addEventListener("touchstart", markInteraction, { passive: true });
-  dateInput.addEventListener("change", () => switchDate(dateInput.value || todayKey()));
-  $("#save-button").addEventListener("click", () => saveCurrent());
+
+  $("#todo-form").addEventListener("submit", addTodo);
+  $("#todo-list").addEventListener("change", (event) => {
+    const item = event.target.closest("[data-todo-id]");
+    if (item && event.target.matches("input[type='checkbox']")) toggleTodo(item.dataset.todoId, event.target.checked);
+  });
+  $("#todo-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-todo]");
+    if (button) deleteTodo(button.dataset.deleteTodo);
+  });
+
+  $("#entry-form").addEventListener("submit", submitEntry);
+  $("#entry-type-grid").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-entry-type]");
+    if (!button) return;
+    currentType = button.dataset.entryType;
+    renderTypeGrid();
+    renderDetailBox();
+  });
+  $("#entry-detail-box").addEventListener("change", (event) => {
+    const label = event.target.closest(".choice-pill");
+    if (label) label.classList.toggle("active", event.target.checked);
+  });
+  $("#cancel-edit-button").addEventListener("click", resetEntryForm);
+  $("#jump-today-button").addEventListener("click", () => {
+    currentDate = getTodayKey();
+    renderAll();
+  });
+
+  document.body.addEventListener("click", (event) => {
+    const edit = event.target.closest("[data-edit-entry]");
+    const remove = event.target.closest("[data-delete-entry]");
+    const open = event.target.closest("[data-open-entry]");
+    if (edit) editEntry(edit.dataset.editEntry);
+    if (remove) deleteEntry(remove.dataset.deleteEntry);
+    if (open) openEntryDate(open.dataset.openEntry);
+  });
+
   $(".bottom-nav").addEventListener("click", (event) => {
     const button = event.target.closest("[data-view]");
     if (button) switchView(button.dataset.view);
   });
-  $("#history-list").addEventListener("click", (event) => {
-    const item = event.target.closest("[data-open-date]");
-    if (item) {
-      switchDate(item.dataset.openDate);
-      switchView("today-view");
-    }
+
+  $("#record-date-input").addEventListener("change", (event) => {
+    selectedRecordDate = event.target.value || getTodayKey();
+    renderRecords();
   });
+  $("#record-type-filter").addEventListener("change", (event) => {
+    selectedRecordType = event.target.value || "all";
+    renderRecords();
+  });
+
+  $("#leisure-form").addEventListener("submit", submitLeisure);
+  $("#cancel-leisure-edit").addEventListener("click", resetLeisureForm);
+  $("#bored-button").addEventListener("click", showBoredSuggestions);
+  $("#leisure-list").addEventListener("click", (event) => {
+    const edit = event.target.closest("[data-edit-leisure]");
+    const remove = event.target.closest("[data-delete-leisure]");
+    const log = event.target.closest("[data-log-leisure]");
+    if (edit) editLeisure(edit.dataset.editLeisure);
+    if (remove) deleteLeisure(remove.dataset.deleteLeisure);
+    if (log) logLeisureToToday(log.dataset.logLeisure);
+  });
+
   $("#export-json").addEventListener("click", exportJson);
   $("#export-md").addEventListener("click", exportMarkdown);
   $("#import-file").addEventListener("change", (event) => importBackup(event.target.files[0]));
+
   document.addEventListener("visibilitychange", () => {
-    addActiveDuration();
-    if (document.visibilityState === "hidden") saveCurrent("已保存。");
+    trackDuration();
+    if (document.visibilityState === "visible") checkDateRoll();
   });
+  window.addEventListener("focus", checkDateRoll);
   setInterval(() => {
-    addActiveDuration();
-    updateDurationLabel();
+    trackDuration();
+    checkDateRoll();
   }, 15000);
 }
 
 function init() {
-  try {
-    const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
-    currentDate = settings.currentDate || todayKey();
-  } catch {
-    currentDate = todayKey();
-  }
-  dateInput.value = currentDate;
-  renderIndex();
-  renderForm();
-  renderHistory();
-  renderReview();
+  selectedRecordDate = currentDate;
+  renderTypeGrid();
+  renderDetailBox();
+  renderAll();
   bindEvents();
   registerServiceWorker();
 }
 
 init();
+
+
+
+
+
+
