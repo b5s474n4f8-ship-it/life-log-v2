@@ -1,1231 +1,957 @@
-﻿const DB_KEY = "life-log-v4";
-const LEGACY_KEYS = ["life-log-records-v3", "life-log-records-v2", "life-log-records-v1"];
+const DB_NAME = "life-log-v5";
+const DB_STORE = "state";
+const DB_KEY = "app";
+const FALLBACK_KEY = "life-log-v5-fallback";
+const LEGACY_KEY = "life-log-v4";
+const PROMPT_VERSION = "life-log-organizer-v1";
 
-const entryTypes = [
-  { id: "sleep", label: "睡眠" },
-  { id: "dream", label: "梦境" },
-  { id: "body", label: "身体" },
-  { id: "chores", label: "庶务" },
-  { id: "movement", label: "运动" },
-  { id: "spiritual", label: "灵修" },
-  { id: "relationship", label: "关系" },
-  { id: "inner", label: "内在与能量" },
-  { id: "creation", label: "创造" },
-  { id: "inspiration", label: "灵感" },
-  { id: "leisure", label: "闲暇" },
-  { id: "free", label: "自由" },
-];
-
-const typeDetails = {
-  sleep: {
-    options: ["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适", "午睡/补觉", "睡得沉", "恢复感好", "恢复感差"],
-    metrics: [
-      { id: "sleepHours", label: "睡眠时长", unit: "小时", step: "0.5" },
-      { id: "napMinutes", label: "午睡/补觉时长", unit: "分钟", step: "5" },
-      { id: "sleepRecovery", label: "恢复感", unit: "/5", step: "1", min: "1", max: "5" },
-    ],
-    extras: [
-      { id: "bedtimeActivity", label: "睡前活动", placeholder: "例如刷手机、读书、祷告、聊天、运动、吃东西。" },
-      { id: "sleepFactors", label: "影响睡眠的因素", placeholder: "例如躺下没睡意、噪音、鸟叫、光线、身体不适、压力。" },
-    ],
-  },
-
-  chores: {
-    options: ["洗澡", "洗衣", "排便", "自我按摩"],
-  },
-  movement: {
-    options: ["八段锦", "普拉提", "跑步机上坡走", "散步/走路", "拉伸", "HIIT", "力量训练", "其他"],
-    metrics: [
-      { id: "movementMinutes", label: "运动时长", unit: "分钟", step: "5" },
-      { id: "walkKm", label: "走路公里数", unit: "公里", step: "0.1" },
-    ],
-  },
-  spiritual: {
-    options: ["祷告", "读经", "默想", "敬拜", "阅读属灵读物"],
-  },
-};
-
-const leisureLabels = {
-  kind: { series: "剧", reality: "综艺", game: "游戏", book: "书", documentary: "纪录片", video: "视频", movie: "电影", other: "其他" },
-  status: { want: "想看", watching: "在看", paused: "暂停", finished: "看完", dropped: "弃置" },
+const leisureOptions = {
+  kind: { series: "剧", reality: "综艺", game: "游戏", book: "书", article: "文章", documentary: "纪录片", video: "视频", movie: "电影", other: "其他" },
+  status: { want: "稍后", watching: "进行中", paused: "暂停", finished: "完成", dropped: "放下" },
   context: { bored: "无聊时", "low-energy": "低能量", relax: "想放松", inspire: "想被启发", social: "想社交" },
-  feeling: { nourishing: "滋养", company: "陪伴", exciting: "兴奋", draining: "消耗", plain: "一般" },
+  feeling: { plain: "一般", nourishing: "滋养", company: "陪伴", exciting: "兴奋", draining: "消耗" },
 };
 
-
-const typePlaceholders = {
-  sleep: "例如：昨晚躺下很久没睡意，早上被鸟叫醒；午睡 40 分钟后恢复感 3/5。",
-  dream: "只记录梦里的画面、人物、情绪或片段，不需要分析。",
-  body: "例如：头痛、浮肿、疲劳、经期、胃口、紧绷或放松。",
-  movement: "例如：八段锦 20 分钟，结束后腰舒服一点。",
-  spiritual: "例如：今天的祷告、读经、提醒、挣扎或领受。",
-  relationship: "例如：一次对话、冲突、支持、连接感或疏离感。",
-  leisure: "例如：看了哪一集、读到哪里、玩了什么，感觉是滋养还是消耗。",
-  free: "先写下来。可以是一句话、一段身体信号、一点关系感受，或者只是‘今天有点无聊’。",
+const detailLabels = { sleep: "睡眠", movement: "运动", chores: "庶务管理", leisure: "闲暇", spiritual: "灵修" };
+const legacyTypeLabels = {
+  sleep: "睡眠", dream: "梦境", body: "身体", chores: "庶务", movement: "运动", spiritual: "灵修",
+  relationship: "关系", inner: "内在与能量", creation: "创造", inspiration: "灵感", leisure: "闲暇", free: "自由记录",
 };
-const dailyThemes = [
-  { a: "#dff2ff", b: "#e8f6df", c: "#fff8df", ink: "#284d51", accent: "#4f8a73", strong: "#2f6a57" },
-  { a: "#e7f8f4", b: "#e7edff", c: "#fff0f5", ink: "#36505f", accent: "#6686b5", strong: "#365f91" },
-  { a: "#f0ecff", b: "#e4f7ff", c: "#f6f9df", ink: "#4b4261", accent: "#7f78b6", strong: "#5e5798" },
-  { a: "#fff3d6", b: "#e7f5e9", c: "#e5f4ff", ink: "#66512e", accent: "#8d9661", strong: "#686f3e" },
-  { a: "#ffeaf0", b: "#e8f6ff", c: "#eff8e6", ink: "#604653", accent: "#b07b87", strong: "#8c5a66" },
-];
+const metricLabels = { sleepHours: ["睡眠时长", "小时"], napMinutes: ["午睡/补觉", "分钟"], sleepRecovery: ["恢复感", "/5"], movementMinutes: ["运动时长", "分钟"], walkKm: ["距离", "公里"] };
 
 const dailyLines = [
-  "慢慢来，今天先接住真实的一点。",
-  "可以轻一点，但不要从自己的生活里缺席。",
-  "今天不需要完整，只需要有一个入口。",
-  "把模糊放下来一点，身体和心会自己说话。",
+  "今天不需要完整，留下一点真实就好。",
   "先记录，再整理；先看见，再判断。",
+  "短短几句也可以，生活不需要被写满。",
   "给生活一点秩序，也给自己一点余地。",
-  "不急着成为更好的人，先和今天在一起。",
+  "可以轻一点，但不要从自己的生活里缺席。",
+  "今天先接住真实的一点。",
+  "不急着总结，先和今天在一起。",
 ];
-
-const legacyMap = {
-  spiritual: "spiritual",
-  sleep: "sleep",
-  dream: "dream",
-  body: "body",
-  chores: "chores",
-  movement: "movement",
-  inner: "inner",
-  energy: "inner",
-  awake: "free",
-  creation: "creation",
-  inspiration: "inspiration",
-  relationship: "relationship",
-  free: "free",
-};
-
-const legacyTitles = {
-  spiritual: "灵修",
-  sleep: "睡眠",
-  dream: "梦境",
-  body: "身体",
-  chores: "庶务",
-  movement: "运动",
-  inner: "内在与能量",
-  energy: "内在与能量",
-  awake: "清醒时间",
-  creation: "创造",
-  inspiration: "灵感",
-  relationship: "关系",
-  free: "自由记录",
-};
-
-const metricLabels = {
-  hours: "睡眠时长",
-  sleepHours: "睡眠时长",
-  napMinutes: "午睡/补觉",
-  sleepRecovery: "恢复感",
-  minutes: "运动时长",
-  movementMinutes: "运动时长",
-  km: "走路公里数",
-  walkKm: "走路公里数",
-};
-
-const metricUnits = {
-  hours: "小时",
-  sleepHours: "小时",
-  napMinutes: "分钟",
-  sleepRecovery: "/5",
-  minutes: "分钟",
-  movementMinutes: "分钟",
-  km: "公里",
-  walkKm: "公里",
-};
-
-const extraLabels = {
-  bedtimeActivity: "睡前活动",
-  sleepFactors: "影响睡眠的因素",
-};
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-let db = loadDatabase();
+let db = null;
+let state = createEmptyState();
 let activeView = "today-view";
-let currentDate = getTodayKey();
-let selectedRecordDate = currentDate;
-let selectedRecordType = "all";
-let currentType = "free";
-let editingEntryId = null;
+let currentDate = todayKey();
+let selectedMonth = currentDate.slice(0, 7);
 let editingLeisureId = null;
-let lastTodayKey = currentDate;
-let lastTickAt = Date.now();
+let saveTimer = null;
+let detailTimer = null;
+let toastTimer = null;
 let lastInteractionAt = Date.now();
+let lastDurationTick = Date.now();
+let lastToday = currentDate;
 
-function createEmptyDb() {
+function createEmptyState() {
   return {
-    version: 4,
-    entries: [],
-    todosByDate: {},
-    leisureItems: [],
-    durationsByDate: {},
-    migratedLegacy: false,
+    version: 5,
+    daily_logs_by_date: {},
+    leisure_items: [],
+    durations_by_date: {},
+    settings: { ai_api_url: "", ai_access_code: "" },
+    migrations: [],
+    seed_ids: [],
   };
 }
 
-function loadDatabase() {
-  const empty = createEmptyDb();
+function emptyLog(date) {
+  const now = new Date().toISOString();
+  return {
+    date,
+    raw_input: "",
+    todos: [],
+    confirmed_details: {},
+    legacy_sections: [],
+    ai_organized: null,
+    ai_versions: [],
+    metadata: { source: "app", created_at: now, updated_at: now },
+  };
+}
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) return reject(new Error("IndexedDB unavailable"));
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const next = request.result;
+      if (!next.objectStoreNames.contains(DB_STORE)) next.createObjectStore(DB_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function idbGet(key) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readonly");
+    const request = tx.objectStore(DB_STORE).get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function idbPut(key, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(DB_KEY) || "null");
-    if (saved && saved.version === 4) {
-      return {
-        ...empty,
-        ...saved,
-        entries: Array.isArray(saved.entries) ? saved.entries : [],
-        todosByDate: saved.todosByDate || {},
-        leisureItems: Array.isArray(saved.leisureItems) ? saved.leisureItems : [],
-        durationsByDate: saved.durationsByDate || {},
-      };
-    }
+    db = await openDb();
+    const saved = await idbGet(DB_KEY);
+    if (saved?.version === 5) return normalizeState(saved);
   } catch {
-    // Keep going and try legacy data.
-  }
-  migrateLegacyInto(empty);
-  saveDatabase(empty);
-  return empty;
-}
-
-function saveDatabase(nextDb = db) {
-  localStorage.setItem(DB_KEY, JSON.stringify(nextDb));
-}
-
-function migrateLegacyInto(target) {
-  for (const key of LEGACY_KEYS) {
-    const raw = localStorage.getItem(key);
-    if (!raw) continue;
+    db = null;
     try {
-      const parsed = JSON.parse(raw);
-      migrateLegacyRecords(target, parsed);
-      target.migratedLegacy = true;
-      return;
-    } catch {
-      // Ignore malformed legacy backups.
-    }
+      const fallback = JSON.parse(localStorage.getItem(FALLBACK_KEY) || "null");
+      if (fallback?.version === 5) return normalizeState(fallback);
+    } catch {}
   }
+  return createEmptyState();
 }
 
-function migrateLegacyRecords(target, source) {
-  const records = extractLegacyRecords(source);
-  for (const record of records) {
-    if (!record.date) continue;
-    const fields = record.fields || {};
-    for (const [fieldId, rawValue] of Object.entries(fields)) {
-      if (fieldId === "memo") {
-        migrateTodos(target, record.date, rawValue);
-        continue;
-      }
-      const value = normalizeLegacyField(rawValue);
-      if (!hasLegacyContent(value)) continue;
-      const type = legacyMap[fieldId] || "free";
-      const heading = legacyTitles[fieldId] || findType(type).label;
-      const text = value.text ? value.text.trim() : "";
-      target.entries.push({
-        id: uid("entry"),
-        date: record.date,
-        type,
-        text: text || heading,
-        tags: value.options,
-        metrics: normalizeLegacyMetrics(value.metrics),
-        createdAt: record.createdAt || `${record.date}T09:00:00.000`,
-        updatedAt: record.updatedAt || record.createdAt || `${record.date}T09:00:00.000`,
-        migratedFrom: fieldId,
-      });
-    }
-  }
-}
-
-function migrateTodos(target, date, rawValue) {
-  const value = normalizeLegacyField(rawValue);
-  const lines = value.text
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^[-*]\s*/, "").trim())
-    .filter(Boolean);
-  if (!lines.length) return;
-  if (!target.todosByDate[date]) target.todosByDate[date] = [];
-  for (const line of lines) {
-    target.todosByDate[date].push({
-      id: uid("todo"),
-      text: line,
-      done: false,
-      createdAt: `${date}T08:00:00.000`,
-      completedAt: null,
-    });
-  }
-}
-
-function extractLegacyRecords(source) {
-  if (Array.isArray(source)) return source;
-  if (Array.isArray(source.records)) return source.records;
-  if (source.records && typeof source.records === "object") {
-    return Object.entries(source.records).map(([date, record]) => ({ ...record, date: record.date || date }));
-  }
-  if (source && typeof source === "object") {
-    return Object.entries(source)
-      .filter(([, value]) => value && typeof value === "object")
-      .map(([date, record]) => ({ ...record, date: record.date || date }));
-  }
-  return [];
-}
-
-function normalizeLegacyField(value) {
-  if (typeof value === "string") return { text: value, options: [], metrics: {} };
+function normalizeState(value) {
   return {
-    text: value?.text || "",
-    options: Array.isArray(value?.options) ? value.options : [],
-    metrics: value?.metrics || {},
+    ...createEmptyState(),
+    ...value,
+    daily_logs_by_date: value.daily_logs_by_date || {},
+    leisure_items: Array.isArray(value.leisure_items) ? value.leisure_items : [],
+    durations_by_date: value.durations_by_date || {},
+    settings: { ...createEmptyState().settings, ...(value.settings || {}) },
+    migrations: Array.isArray(value.migrations) ? value.migrations : [],
+    seed_ids: Array.isArray(value.seed_ids) ? value.seed_ids : [],
   };
 }
 
-function hasLegacyContent(value) {
-  return Boolean(value.text.trim() || value.options.length || Object.keys(value.metrics || {}).length);
+async function persistState() {
+  try {
+    if (db) await idbPut(DB_KEY, state);
+    else localStorage.setItem(FALLBACK_KEY, JSON.stringify(state));
+  } catch {
+    localStorage.setItem(FALLBACK_KEY, JSON.stringify(state));
+  }
+  renderStorageStatus();
 }
 
-function normalizeLegacyMetrics(metrics) {
-  const normalized = {};
-  for (const [key, value] of Object.entries(metrics || {})) {
-    if (value === "" || value == null) continue;
-    if (key === "hours") normalized.sleepHours = value;
-    else if (key === "minutes") normalized.movementMinutes = value;
-    else if (key === "km") normalized.walkKm = value;
-    else normalized[key] = value;
+function ensureLog(date) {
+  if (!state.daily_logs_by_date[date]) state.daily_logs_by_date[date] = emptyLog(date);
+  return state.daily_logs_by_date[date];
+}
+
+function migrateV4() {
+  if (state.migrations.includes("localstorage-v4")) return false;
+  let old = null;
+  try { old = JSON.parse(localStorage.getItem(LEGACY_KEY) || "null"); } catch {}
+  if (old?.version === 4) {
+    for (const entry of old.entries || []) {
+      if (!entry?.date) continue;
+      const log = ensureLog(entry.date);
+      const label = legacyTypeLabels[entry.type] || "记录";
+      const details = [];
+      if (entry.tags?.length) details.push(`选项：${entry.tags.join("，")}`);
+      const metrics = formatMetrics(entry.metrics || {});
+      if (metrics) details.push(`数据：${metrics}`);
+      for (const [key, value] of Object.entries(entry.extras || {})) {
+        const extraLabel = key === "bedtimeActivity" ? "睡前活动" : key === "sleepFactors" ? "影响睡眠的因素" : key;
+        if (value) details.push(`${extraLabel}：${value}`);
+      }
+      if (entry.text) details.push(entry.text);
+      const content = details.join("\n");
+      const time = formatTime(entry.createdAt);
+      log.legacy_sections.push({ title: label, time, content });
+      log.raw_input += `${log.raw_input ? "\n\n" : ""}【${label}${time ? ` · ${time}` : ""}】\n${content}`;
+      mergeLegacyDetail(log, entry);
+      log.metadata = { ...log.metadata, source: "localstorage-v4", updated_at: entry.updatedAt || entry.createdAt || log.metadata.updated_at };
+    }
+    for (const [date, todos] of Object.entries(old.todosByDate || {})) {
+      ensureLog(date).todos = Array.isArray(todos) ? todos : [];
+    }
+    for (const item of old.leisureItems || []) {
+      if (!state.leisure_items.some((saved) => saved.id === item.id || saved.title === item.title)) state.leisure_items.push(normalizeLeisure(item));
+    }
+    state.durations_by_date = { ...old.durationsByDate, ...state.durations_by_date };
   }
-  return normalized;
+  state.migrations.push("localstorage-v4");
+  return Boolean(old);
+}
+
+function mergeLegacyDetail(log, entry) {
+  const type = entry.type;
+  if (!["sleep", "movement", "chores", "spiritual"].includes(type)) return;
+  const existing = log.confirmed_details[type] || { tags: [], metrics: {}, extras: {}, note: "" };
+  existing.tags = [...new Set([...(existing.tags || []), ...(entry.tags || [])])];
+  existing.metrics = { ...(existing.metrics || {}), ...(entry.metrics || {}) };
+  existing.extras = { ...(existing.extras || {}), ...(entry.extras || {}) };
+  if (entry.text) existing.note = [existing.note, entry.text].filter(Boolean).join("\n\n");
+  log.confirmed_details[type] = existing;
+}
+
+function hasLogContent(log) {
+  return Boolean(log?.raw_input?.trim() || log?.todos?.length || Object.keys(log?.confirmed_details || {}).length || log?.legacy_sections?.length || log?.ai_organized);
+}
+
+function normalizeLeisure(item) {
+  return {
+    id: item.id || uid("leisure"), title: item.title || "", kind: item.kind || "other", original_kind: item.original_kind || "",
+    status: item.status || "want", progress: item.progress || "", context: item.context || "bored", feeling: item.feeling || "plain",
+    note: item.note || "", created_at: item.created_at || item.createdAt || new Date().toISOString(), updated_at: item.updated_at || item.updatedAt || new Date().toISOString(), metadata: item.metadata || {},
+  };
+}
+
+function todayKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function dateFromKey(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d, 12);
+}
+
+function formatDate(key, options = { month: "long", day: "numeric" }) {
+  return new Intl.DateTimeFormat("zh-CN", options).format(dateFromKey(key));
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  try { return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)); } catch { return ""; }
+}
+
+function dateHash(value) {
+  return [...value].reduce((sum, char) => sum + char.charCodeAt(0), 0);
 }
 
 function uid(prefix) {
-  if (window.crypto && crypto.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getTodayKey(date = new Date()) {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function dateFromKey(dateKey) {
-  return new Date(`${dateKey}T12:00:00`);
-}
-
-function dateHash(dateKey) {
-  return [...dateKey].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-}
-
-function findType(typeId) {
-  return entryTypes.find((type) => type.id === typeId) || entryTypes[entryTypes.length - 1];
-}
-
-function formatDateTitle(dateKey) {
-  return new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric" }).format(dateFromKey(dateKey));
-}
-
-function formatWeekday(dateKey) {
-  return new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(dateFromKey(dateKey));
-}
-
-function formatTime(iso) {
-  try {
-    return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
-  } catch {
-    return "";
-  }
+function normalizeText(value) {
+  return String(value || "").trim().toLocaleLowerCase("zh-CN");
 }
 
 function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
-function applyTheme(dateKey) {
-  const theme = dailyThemes[dateHash(dateKey) % dailyThemes.length];
-  const root = document.documentElement;
-  root.style.setProperty("--theme-a", theme.a);
-  root.style.setProperty("--theme-b", theme.b);
-  root.style.setProperty("--theme-c", theme.c);
-  root.style.setProperty("--theme-ink", theme.ink);
-  root.style.setProperty("--accent", theme.accent);
-  root.style.setProperty("--accent-strong", theme.strong);
+function fingerprint(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+  return (hash >>> 0).toString(16);
 }
 
-function getTodos(dateKey) {
-  if (!db.todosByDate[dateKey]) db.todosByDate[dateKey] = [];
-  return db.todosByDate[dateKey];
+function download(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function getEntries(dateKey) {
-  return db.entries
-    .filter((entry) => entry.date === dateKey)
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+function showToast(message) {
+  clearTimeout(toastTimer);
+  const toast = $("#toast");
+  toast.textContent = message; toast.hidden = false;
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 2400);
 }
 
-function markInteraction() {
-  lastInteractionAt = Date.now();
+function updateWordCount() {
+  const count = $("#raw-input").value.replace(/\s/g, "").length;
+  $("#word-count").textContent = `${count} 字`;
 }
 
-function trackDuration() {
-  const now = Date.now();
-  const visible = document.visibilityState === "visible";
-  const recentlyActive = now - lastInteractionAt < 120000;
-  if (visible && recentlyActive && activeView === "today-view") {
-    const diff = Math.min(now - lastTickAt, 30000);
-    db.durationsByDate[currentDate] = Number(db.durationsByDate[currentDate] || 0) + diff;
-    saveDatabase();
-  }
-  lastTickAt = now;
-  renderDuration();
+function autoResize() {
+  const input = $("#raw-input");
+  input.style.height = "auto";
+  input.style.height = `${Math.max(230, Math.min(input.scrollHeight, 760))}px`;
 }
 
-function renderDuration() {
-  const minutes = Math.round(Number(db.durationsByDate[currentDate] || 0) / 60000);
-  $("#duration-label").textContent = `今日记录用时约 ${minutes} 分钟`;
-}
-
-function updateEntryPlaceholder() {
-  const textarea = $("#entry-text");
-  if (!textarea) return;
-  textarea.placeholder = typePlaceholders[currentType] || typePlaceholders.free;
-}
-function renderTypeGrid() {
-  updateEntryPlaceholder();
-  $("#entry-type-grid").innerHTML = entryTypes
-    .map(
-      (type) => `
-        <button class="type-button ${type.id === currentType ? "active" : ""}" type="button" data-entry-type="${type.id}">
-          ${type.label}
-        </button>
-      `,
-    )
-    .join("");
-}
-
-function renderDetailBox(entry = null) {
-  const details = typeDetails[currentType];
-  const selected = new Set(entry?.tags || []);
-  const metrics = entry?.metrics || {};
-  const extras = entry?.extras || {};
-  if (!details) {
-    $("#entry-detail-box").innerHTML = "";
-    return;
-  }
-  const help = details.help ? `<p class="detail-help">${details.help}</p>` : "";
-  const options = details.options
-    ? `<div class="choice-grid">${details.options
-        .map(
-          (option) => `
-            <label class="choice-pill ${selected.has(option) ? "active" : ""}">
-              <input type="checkbox" value="${escapeHtml(option)}" ${selected.has(option) ? "checked" : ""}>
-              <span>${escapeHtml(option)}</span>
-            </label>
-          `,
-        )
-        .join("")}</div>`
-    : "";
-  const metricInputs = details.metrics
-    ? `<div class="metric-grid">${details.metrics
-        .map(
-          (metric) => `
-            <label>
-              <span>${metric.label}</span>
-              <input type="number" inputmode="decimal" min="${metric.min || "0"}" ${metric.max ? 'max="' + metric.max + '"' : ""} step="${metric.step}" data-metric="${metric.id}" value="${escapeHtml(metrics[metric.id] || "")}" placeholder="${metric.unit}">
-            </label>
-          `,
-        )
-        .join("")}</div>`
-    : "";
-  const extraInputs = details.extras
-    ? `<div class="extra-grid">${details.extras
-        .map(
-          (extra) => `
-            <label>
-              <span>${extra.label}</span>
-              <textarea data-extra="${extra.id}" placeholder="${escapeHtml(extra.placeholder || "")}">${escapeHtml(extras[extra.id] || "")}</textarea>
-            </label>
-          `,
-        )
-        .join("")}</div>`
-    : "";
-  $("#entry-detail-box").innerHTML = `${help}${options}${metricInputs}${extraInputs}`;
+function renderDateHeader() {
+  const isToday = currentDate === todayKey();
+  $("#weekday").textContent = `${isToday ? "今天" : "历史"} · ${formatDate(currentDate, { weekday: "long" })}`;
+  $("#day-title").textContent = formatDate(currentDate);
+  $("#daily-line").textContent = dailyLines[dateHash(currentDate) % dailyLines.length];
+  $("#history-mode").hidden = isToday;
 }
 
 function renderToday() {
-  applyTheme(currentDate);
-  const today = getTodayKey();
-  $("#date-label").textContent = formatDateTitle(currentDate);
-  $("#weekday-label").textContent = currentDate === today ? `今天 · ${formatWeekday(currentDate)}` : `${formatWeekday(currentDate)} · 历史`;
-  $("#daily-line").textContent = dailyLines[dateHash(currentDate) % dailyLines.length];
-  $("#jump-today-button").hidden = currentDate === today;
-  renderHistoryNotice();
-  renderTodos();
-  renderEntryList("#today-entry-list", getEntries(currentDate));
-  $("#entry-count").textContent = `${getEntries(currentDate).length} 条`;
+  const log = ensureLog(currentDate);
+  renderDateHeader();
+  $("#raw-input").value = log.raw_input || "";
+  updateWordCount(); autoResize();
+  renderTodos(log);
+  renderDetailStack(log);
+  renderAi(log);
   renderDuration();
 }
 
-function renderHistoryNotice(message = "") {
-  const notice = $("#history-notice");
-  const today = getTodayKey();
-  if (message) {
-    notice.hidden = false;
-    notice.textContent = message;
-    return;
-  }
-  if (currentDate !== today) {
-    notice.hidden = false;
-    notice.textContent = `正在查看 ${currentDate} 的历史记录。点“回到今天”会回到 ${today}。`;
-  } else {
-    notice.hidden = true;
-    notice.textContent = "";
-  }
+function scheduleRawSave() {
+  const log = ensureLog(currentDate);
+  log.raw_input = $("#raw-input").value;
+  log.metadata = { ...(log.metadata || {}), updated_at: new Date().toISOString() };
+  updateWordCount(); autoResize(); markAiStale(log);
+  const status = $("#autosave-status");
+  status.classList.add("saving"); status.querySelector("span:last-child").textContent = "正在自动保存";
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    await persistState();
+    status.classList.remove("saving"); status.querySelector("span:last-child").textContent = `已自动保存 · ${formatTime(new Date().toISOString())}`;
+  }, 550);
 }
 
-function renderTodos() {
-  const todos = getTodos(currentDate);
-  const done = todos.filter((todo) => todo.done).length;
-  $("#todo-count").textContent = `${done}/${todos.length}`;
-  $("#todo-list").innerHTML = todos.length
-    ? todos
-        .map(
-          (todo) => `
-            <div class="todo-item" data-todo-id="${todo.id}">
-              <input type="checkbox" ${todo.done ? "checked" : ""} aria-label="完成 ${escapeHtml(todo.text)}">
-              <span class="todo-text ${todo.done ? "done" : ""}">${escapeHtml(todo.text)}</span>
-              <button class="icon-button" type="button" data-delete-todo="${todo.id}" aria-label="删除">×</button>
-            </div>
-          `,
-        )
-        .join("")
-    : `<p class="empty-state">这里可以放今天要托住的小事。没有也很好。</p>`;
+async function saveNow() {
+  const log = ensureLog(currentDate);
+  log.raw_input = $("#raw-input").value;
+  log.metadata = { ...(log.metadata || {}), updated_at: new Date().toISOString() };
+  await persistState();
+  $("#autosave-status").querySelector("span:last-child").textContent = `已保存 · ${formatTime(new Date().toISOString())}`;
+  showToast("已保存。原始记录完整保留在 app 中。");
 }
 
-function collectEntryDetails() {
-  const tags = $$("#entry-detail-box input[type='checkbox']:checked").map((input) => input.value);
-  const metrics = {};
-  $$("#entry-detail-box [data-metric]").forEach((input) => {
-    if (input.value !== "") metrics[input.dataset.metric] = input.value;
-  });
-  const extras = {};
-  $$("#entry-detail-box [data-extra]").forEach((input) => {
-    const value = input.value.trim();
-    if (value) extras[input.dataset.extra] = value;
-  });
-  return { tags, metrics, extras };
+function renderTodos(log) {
+  const todos = log.todos || [];
+  $("#todo-count").textContent = `${todos.filter((todo) => todo.done).length}/${todos.length}`;
+  $("#todo-list").innerHTML = todos.length ? todos.map((todo) => `
+    <div class="todo-item" data-todo-id="${escapeHtml(todo.id)}">
+      <input type="checkbox" ${todo.done ? "checked" : ""} aria-label="完成：${escapeHtml(todo.text)}" />
+      <span class="${todo.done ? "done" : ""}">${escapeHtml(todo.text)}</span>
+      <button type="button" class="remove-button" data-delete-todo aria-label="删除这件事">×</button>
+    </div>`).join("") : `<p class="empty-note">这里可以放今天要托住的小事。没有也很好。</p>`;
 }
 
-function resetEntryForm() {
-  editingEntryId = null;
-  currentType = "free";
-  $("#entry-text").value = "";
-  $("#entry-submit-button").textContent = "保存这一条";
-  $("#cancel-edit-button").hidden = true;
-  renderTypeGrid();
-  renderDetailBox();
-}
-
-function submitEntry(event) {
-  event.preventDefault();
-  markInteraction();
-  const text = $("#entry-text").value.trim();
-  const { tags, metrics, extras } = collectEntryDetails();
-  const hasDetails = tags.length || Object.keys(metrics).length || Object.keys(extras).length;
-  if (!text && !hasDetails) {
-    $("#save-status").textContent = "可以先写一点，或者选择一个小标签。";
-    return;
-  }
-
-  const now = new Date().toISOString();
-  if (editingEntryId) {
-    const entry = db.entries.find((item) => item.id === editingEntryId);
-    if (entry) {
-      entry.type = currentType;
-      entry.text = text;
-      entry.tags = tags;
-      entry.metrics = metrics;
-      entry.extras = extras;
-      entry.updatedAt = now;
-      entry.date = currentDate;
-    }
-    $("#save-status").textContent = "这一条已更新。";
-  } else {
-    db.entries.push({
-      id: uid("entry"),
-      date: currentDate,
-      type: currentType,
-      text,
-      tags,
-      metrics,
-      extras,
-      createdAt: now,
-      updatedAt: now,
-    });
-    $("#save-status").textContent = "已保存这一条。";
-  }
-  saveDatabase();
-  resetEntryForm();
-  renderAll();
-}
-
-function renderEntryList(selector, entries) {
-  const container = $(selector);
-  if (!entries.length) {
-    container.innerHTML = `<article class="entry-card"><p class="empty-state">还没有记录。生活不需要被填满，想到什么再放进来。</p></article>`;
-    return;
-  }
-  container.innerHTML = entries
-    .map((entry) => {
-      const type = findType(entry.type);
-      const detail = renderEntryDetail(entry);
-      return `
-        <article class="entry-card" data-entry-id="${entry.id}">
-          <div class="entry-meta">
-            <span class="type-badge">${type.label}</span>
-            <span class="time-text">${entry.date} · ${formatTime(entry.createdAt)}</span>
-          </div>
-          ${entry.text ? `<p>${escapeHtml(entry.text)}</p>` : ""}
-          ${detail}
-          <div class="card-actions">
-            <button class="mini-button" type="button" data-open-entry="${entry.id}">打开这天</button>
-            <button class="mini-button" type="button" data-edit-entry="${entry.id}">编辑</button>
-            <button class="danger-button" type="button" data-delete-entry="${entry.id}">删除</button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function renderEntryDetail(entry) {
-  const chips = [];
-  for (const tag of entry.tags || []) chips.push(`<span class="data-chip">${escapeHtml(tag)}</span>`);
-  for (const [key, value] of Object.entries(entry.metrics || {})) {
-    chips.push(`<span class="data-chip">${metricLabels[key] || key} ${escapeHtml(value)}${metricUnits[key] || ""}</span>`);
-  }
-  const extraLines = Object.entries(entry.extras || {})
-    .filter(([, value]) => value)
-    .map(([key, value]) => `<p class="extra-line"><strong>${extraLabels[key] || key}：</strong>${escapeHtml(value)}</p>`);
-  const chipHtml = chips.length ? `<div class="entry-meta">${chips.join("")}</div>` : "";
-  const extraHtml = extraLines.length ? `<div class="extra-lines">${extraLines.join("")}</div>` : "";
-  return `${chipHtml}${extraHtml}`;
-}
-
-function editEntry(entryId) {
-  const entry = db.entries.find((item) => item.id === entryId);
-  if (!entry) return;
-  currentDate = entry.date;
-  activeView = "today-view";
-  currentType = entry.type;
-  editingEntryId = entry.id;
-  $("#entry-text").value = entry.text || "";
-  $("#entry-submit-button").textContent = "更新这一条";
-  $("#cancel-edit-button").hidden = false;
-  renderTypeGrid();
-  renderDetailBox(entry);
-  switchView("today-view", { keepDate: true, keepEditing: true });
-  setTimeout(() => $("#entry-text").focus(), 0);
-}
-
-function deleteEntry(entryId) {
-  db.entries = db.entries.filter((entry) => entry.id !== entryId);
-  saveDatabase();
-  renderAll();
-}
-
-function openEntryDate(entryId) {
-  const entry = db.entries.find((item) => item.id === entryId);
-  if (!entry) return;
-  currentDate = entry.date;
-  switchView("today-view", { keepDate: true });
-}
-
-function renderRecords() {
-  $("#record-date-input").value = selectedRecordDate;
-  $("#record-type-filter").innerHTML = `<option value="all">全部类型</option>${entryTypes
-    .map((type) => `<option value="${type.id}">${type.label}</option>`)
-    .join("")}`;
-  $("#record-type-filter").value = selectedRecordType;
-  const entries = getEntries(selectedRecordDate).filter((entry) => selectedRecordType === "all" || entry.type === selectedRecordType);
-  renderEntryList("#record-entry-list", entries);
-}
-
-function addTodo(event) {
+async function addTodo(event) {
   event.preventDefault();
   const input = $("#todo-input");
   const text = input.value.trim();
   if (!text) return;
-  getTodos(currentDate).push({
-    id: uid("todo"),
-    text,
-    done: false,
-    createdAt: new Date().toISOString(),
-    completedAt: null,
+  const log = ensureLog(currentDate);
+  log.todos.push({ id: uid("todo"), text, done: false, created_at: new Date().toISOString() });
+  input.value = ""; await persistState(); renderTodos(log);
+}
+
+async function handleTodoClick(event) {
+  const item = event.target.closest("[data-todo-id]");
+  if (!item) return;
+  const log = ensureLog(currentDate);
+  if (event.target.matches("input[type='checkbox']")) {
+    const todo = log.todos.find((value) => value.id === item.dataset.todoId);
+    if (todo) { todo.done = event.target.checked; todo.completed_at = todo.done ? new Date().toISOString() : null; }
+  }
+  if (event.target.closest("[data-delete-todo]")) log.todos = log.todos.filter((value) => value.id !== item.dataset.todoId);
+  await persistState(); renderTodos(log);
+}
+
+function renderDetailStack(log) {
+  $("#detail-stack").innerHTML = [renderSleepPanel(), renderMovementPanel(), renderChoresPanel(), renderDailyLeisurePanel(), renderSpiritualPanel()].join("");
+  populateDetail("sleep", log.confirmed_details?.sleep);
+  populateDetail("movement", log.confirmed_details?.movement);
+  populateDetail("chores", log.confirmed_details?.chores);
+  populateDetail("spiritual", log.confirmed_details?.spiritual);
+  markFilledPanels(log);
+}
+
+function panelShell(type, mark, markClass, title, subtitle, content) {
+  return `<details class="detail-panel" data-detail="${type}"><summary><span class="detail-mark ${markClass}">${mark}</span><span><strong>${title}</strong><small>${subtitle}</small></span></summary><div class="detail-content" id="${type}-form">${content}</div></details>`;
+}
+
+function chips(values) {
+  return `<div class="chip-checks" data-tags>${values.map((value) => `<label><input type="checkbox" value="${escapeHtml(value)}" /><span>${escapeHtml(value)}</span></label>`).join("")}</div>`;
+}
+
+function renderSleepPanel() {
+  return panelShell("sleep", "睡", "sky", "睡眠", "昨晚睡得如何？", `
+    <fieldset><legend>整体感受</legend><div class="segmented-control">${["好", "一般", "差"].map((v) => `<label><input type="radio" name="sleep-quality" value="${v}" /><span>${v}</span></label>`).join("")}</div></fieldset>
+    <div class="two-fields three-fields">
+      <label>睡眠时长<input data-metric="sleepHours" type="number" inputmode="decimal" min="0" step="0.5" /><small>小时</small></label>
+      <label>午睡/补觉<input data-metric="napMinutes" type="number" inputmode="numeric" min="0" step="5" /><small>分钟</small></label>
+      <label>恢复感<input data-metric="sleepRecovery" type="number" inputmode="numeric" min="1" max="5" /><small>/5</small></label>
+    </div>
+    ${chips(["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适", "睡得沉"])}
+    <label class="field-label">睡前活动<textarea data-extra="bedtimeActivity" rows="2" placeholder="例如聊天、刷手机、读书、祷告"></textarea></label>
+    <label class="field-label">影响睡眠的因素<textarea data-extra="sleepFactors" rows="2" placeholder="例如鸟叫、噪音、光线、身体不适"></textarea></label>`);
+}
+
+function renderMovementPanel() {
+  return panelShell("movement", "动", "mint-bg", "运动", "今天是否有一点点活动？", `
+    ${chips(["八段锦", "普拉提", "跑步机上坡走", "散步/走路", "拉伸", "HIIT", "力量训练", "其他"])}
+    <div class="two-fields"><label>时长<input data-metric="movementMinutes" type="number" inputmode="numeric" min="0" step="5" /><small>分钟</small></label><label>距离<input data-metric="walkKm" type="number" inputmode="decimal" min="0" step="0.1" /><small>公里</small></label></div>
+    <label class="field-label">身体感受<textarea data-note rows="2" placeholder="过程中或结束后，身体感觉如何？"></textarea></label>`);
+}
+
+function renderChoresPanel() {
+  return panelShell("chores", "务", "warm", "庶务管理", "基础生活照料", chips(["洗澡", "洗衣", "排便", "自我按摩"]));
+}
+
+function renderDailyLeisurePanel() {
+  return panelShell("leisure", "闲", "lilac-bg", "闲暇", "看、读、玩了什么？", `
+    <div class="form-stack" id="daily-leisure-fields"><label class="field-label">名称<input data-field="title" type="text" placeholder="剧、综艺、游戏、书、文章……" /></label>
+    <div class="two-fields plain"><label>类型<select data-field="kind">${optionHtml(leisureOptions.kind, "article")}</select></label><label>感受<select data-field="feeling">${optionHtml(leisureOptions.feeling, "plain")}</select></label></div>
+    <label class="field-label">进度<input data-field="progress" type="text" placeholder="例如 S1E3、第 120 页、读完一半" /></label>
+    <label class="field-label">一句话<textarea data-field="note" rows="2" placeholder="为什么想继续，或者它留下了什么。"></textarea></label>
+    <button class="inline-save" id="save-daily-leisure" type="button">保存到闲暇清单</button></div>`);
+}
+
+function renderSpiritualPanel() {
+  return panelShell("spiritual", "灵", "rose", "灵修", "今天是否有灵修？", `${chips(["祷告", "读经", "默想", "敬拜", "阅读属灵读物"])}<label class="field-label">想留下的触动<textarea data-note rows="3" placeholder="触动、提醒、问题、挣扎或领受；可以只写一句。"></textarea></label>`);
+}
+
+function optionHtml(map, selected = "") {
+  return Object.entries(map).map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function populateDetail(type, value = {}) {
+  const panel = $(`[data-detail="${type}"]`);
+  if (!panel) return;
+  for (const input of panel.querySelectorAll("[data-tags] input")) input.checked = (value.tags || []).includes(input.value);
+  for (const input of panel.querySelectorAll("[data-metric]")) input.value = value.metrics?.[input.dataset.metric] ?? "";
+  for (const input of panel.querySelectorAll("[data-extra]")) input.value = value.extras?.[input.dataset.extra] || "";
+  const note = panel.querySelector("[data-note]");
+  if (note) note.value = value.note || "";
+  const quality = panel.querySelector(`input[name="${type}-quality"][value="${CSS.escape(value.quality || "")}"]`);
+  if (quality) quality.checked = true;
+}
+
+function collectDetail(type) {
+  const panel = $(`[data-detail="${type}"]`);
+  const tags = [...panel.querySelectorAll("[data-tags] input:checked")].map((input) => input.value);
+  const metrics = {};
+  for (const input of panel.querySelectorAll("[data-metric]")) if (input.value !== "") metrics[input.dataset.metric] = Number(input.value);
+  const extras = {};
+  for (const input of panel.querySelectorAll("[data-extra]")) if (input.value.trim()) extras[input.dataset.extra] = input.value.trim();
+  const note = panel.querySelector("[data-note]")?.value.trim() || "";
+  const quality = panel.querySelector(`input[name="${type}-quality"]:checked`)?.value || "";
+  return { tags, metrics, extras, note, quality };
+}
+
+function detailHasContent(value) {
+  return Boolean(value?.tags?.length || Object.keys(value?.metrics || {}).length || Object.keys(value?.extras || {}).length || value?.note || value?.quality || value?.items?.length || value?.ai_facts?.length);
+}
+
+function saveDetailFromEvent(event) {
+  const panel = event.target.closest("[data-detail]");
+  if (!panel || panel.dataset.detail === "leisure") return;
+  const type = panel.dataset.detail;
+  clearTimeout(detailTimer);
+  detailTimer = setTimeout(async () => {
+    const log = ensureLog(currentDate);
+    const value = collectDetail(type);
+    if (detailHasContent(value)) log.confirmed_details[type] = value;
+    else delete log.confirmed_details[type];
+    log.metadata.updated_at = new Date().toISOString();
+    await persistState(); markFilledPanels(log);
+  }, 350);
+}
+
+function markFilledPanels(log) {
+  for (const panel of $$(".detail-panel")) panel.classList.toggle("has-data", detailHasContent(log.confirmed_details?.[panel.dataset.detail]));
+}
+
+async function saveDailyLeisure() {
+  const fields = $("#daily-leisure-fields");
+  const title = fields.querySelector('[data-field="title"]').value.trim();
+  if (!title) { showToast("先写下名称，再保存到闲暇清单。"); return; }
+  const item = {
+    id: uid("leisure"), title, kind: fields.querySelector('[data-field="kind"]').value, status: "watching",
+    progress: fields.querySelector('[data-field="progress"]').value.trim(), context: "bored", feeling: fields.querySelector('[data-field="feeling"]').value,
+    note: fields.querySelector('[data-field="note"]').value.trim(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), metadata: { source: "daily-detail" },
+  };
+  state.leisure_items.push(item);
+  const log = ensureLog(currentDate);
+  const detail = log.confirmed_details.leisure || { items: [] };
+  detail.items = [...new Set([...(detail.items || []), item.id])];
+  log.confirmed_details.leisure = detail;
+  await persistState(); renderDetailStack(log); showToast("已放进闲暇清单，也记在今天。");
+}
+
+function markAiStale(log) {
+  if (!log.ai_organized) return;
+  const stale = log.ai_organized.metadata?.source_hash !== fingerprint(log.raw_input || "");
+  $("#stale-notice").hidden = !stale;
+  $("#organize-button .button-label").textContent = stale ? "重新整理今天" : "再次整理";
+}
+
+function renderAi(log) {
+  const ai = log.ai_organized;
+  $("#ai-section").hidden = !ai;
+  if (!ai) { $("#organize-button .button-label").textContent = "帮我整理今天"; return; }
+  $("#ai-summary").textContent = ai.summary || ai.daily_sentence || "";
+  $("#ai-reflection").textContent = ai.reflection || "";
+  $("#theme-row").innerHTML = (ai.themes || []).map((theme) => `<span>${escapeHtml(theme)}</span>`).join("");
+  const facts = ai.facts || [];
+  $("#extracted-fields").innerHTML = facts.length ? facts.map((fact, index) => `
+    <div class="extracted-row" data-fact-index="${index}">
+      <input type="checkbox" ${fact.selected !== false ? "checked" : ""} ${ai.confirmed ? "disabled" : ""} aria-label="将${escapeHtml(fact.label || fact.category)}记入复盘" />
+      <span class="extracted-name">${escapeHtml(fact.label || fact.category)}</span>
+      <input class="extracted-value" type="text" value="${escapeHtml(fact.value || "")}" ${ai.confirmed ? "disabled" : ""} aria-label="${escapeHtml(fact.label || fact.category)}提取结果" />
+    </div>`).join("") : `<p class="empty-note">没有提取到需要单独确认的内容。</p>`;
+  $("#confirmation-state").textContent = ai.confirmed ? "已确认" : "待确认";
+  $("#confirmation-state").classList.toggle("confirmed", Boolean(ai.confirmed));
+  $("#confirm-button").disabled = Boolean(ai.confirmed);
+  $("#confirm-button").textContent = ai.confirmed ? "已记入复盘" : "确认并记入复盘";
+  $("#extracted-fields").classList.toggle("locked", Boolean(ai.confirmed));
+  $("#ai-version").textContent = `第 ${(log.ai_versions?.length || 0) + 1} 版`;
+  const meta = ai.metadata || {};
+  $("#generated-time").textContent = [meta.model, meta.generated_at ? formatTime(meta.generated_at) : "", meta.prompt_version].filter(Boolean).join(" · ");
+  markAiStale(log);
+}
+
+async function organizeToday() {
+  const log = ensureLog(currentDate);
+  log.raw_input = $("#raw-input").value;
+  if (!log.raw_input.trim()) { showToast("先留下一点原始记录，再请 AI 整理。"); $("#raw-input").focus(); return; }
+  const { ai_api_url: url, ai_access_code: code } = state.settings;
+  if (!url || !code) { switchView("backup-view"); $("#ai-settings").scrollIntoView({ behavior: "smooth" }); showToast("先在备份与设置里连接 AI 接口。"); return; }
+  const button = $("#organize-button");
+  button.disabled = true; button.classList.add("is-loading"); button.querySelector(".button-label").hidden = true; button.querySelector(".button-progress").hidden = false;
+  try {
+    await persistState();
+    const response = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-App-Access-Code": code },
+      body: JSON.stringify({ date: currentDate, raw_input: log.raw_input, confirmed_details: log.confirmed_details, prompt_version: PROMPT_VERSION }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ai_organized) throw new Error(result.error || "AI 整理暂时没有完成");
+    if (log.ai_organized) log.ai_versions = [...(log.ai_versions || []), log.ai_organized].slice(-5);
+    log.ai_organized = {
+      ...result.ai_organized,
+      confirmed: false,
+      facts: (result.ai_organized.facts || []).map((fact) => ({ ...fact, selected: true })),
+      metadata: { ...(result.metadata || {}), source_hash: fingerprint(log.raw_input), prompt_version: result.metadata?.prompt_version || PROMPT_VERSION },
+    };
+    await persistState(); renderAi(log); $("#ai-section").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    showToast(`${error.message || "AI 整理失败"}。原始记录和旧整理都没有变化。`);
+  } finally {
+    button.disabled = false; button.classList.remove("is-loading"); button.querySelector(".button-label").hidden = false; button.querySelector(".button-progress").hidden = true;
+  }
+}
+
+async function confirmAi() {
+  const log = ensureLog(currentDate);
+  if (!log.ai_organized) return;
+  const facts = [...$("#extracted-fields").querySelectorAll("[data-fact-index]")].map((row) => {
+    const original = log.ai_organized.facts[Number(row.dataset.factIndex)];
+    return { ...original, selected: row.querySelector('input[type="checkbox"]').checked, value: row.querySelector(".extracted-value").value.trim() };
   });
-  input.value = "";
-  saveDatabase();
-  renderTodos();
+  log.ai_organized.facts = facts;
+  log.ai_organized.confirmed = true;
+  log.confirmed_details.ai_facts = facts.filter((fact) => fact.selected).map(({ category, label, value }) => ({ category, label, value }));
+  await persistState(); renderAi(log); showToast("已确认。原始记录仍完整保留。");
 }
 
-function toggleTodo(todoId, done) {
-  const todo = getTodos(currentDate).find((item) => item.id === todoId);
-  if (!todo) return;
-  todo.done = done;
-  todo.completedAt = done ? new Date().toISOString() : null;
-  saveDatabase();
-  renderTodos();
+function adjustAi() {
+  const log = ensureLog(currentDate);
+  if (!log.ai_organized) return;
+  log.ai_organized.confirmed = false;
+  renderAi(log);
+  $("#extracted-fields .extracted-value")?.focus();
 }
 
-function deleteTodo(todoId) {
-  db.todosByDate[currentDate] = getTodos(currentDate).filter((todo) => todo.id !== todoId);
-  saveDatabase();
-  renderTodos();
+function recordedDates() {
+  return Object.keys(state.daily_logs_by_date).filter((date) => hasLogContent(state.daily_logs_by_date[date])).sort().reverse();
+}
+
+function previewText(log) {
+  return (log.raw_input || log.metadata?.source_markdown || "").replace(/【[^】]+】/g, " ").replace(/^#+\s.*$/gm, " ").replace(/\s+/g, " ").trim().slice(0, 118);
+}
+
+function recordTags(log) {
+  const tags = [];
+  for (const key of ["sleep", "movement", "chores", "spiritual", "leisure"]) if (detailHasContent(log.confirmed_details?.[key])) tags.push(detailLabels[key]);
+  for (const theme of log.ai_organized?.themes || []) if (!tags.includes(theme)) tags.push(theme);
+  return tags.slice(0, 5);
+}
+
+function renderRecords() {
+  $("#record-month").value = selectedMonth;
+  const all = recordedDates();
+  const dates = selectedMonth ? all.filter((date) => date.startsWith(selectedMonth)) : all;
+  $("#record-total").textContent = `${dates.length} 天`;
+  $("#record-list").innerHTML = dates.length ? dates.map((date) => {
+    const log = state.daily_logs_by_date[date];
+    const tags = recordTags(log);
+    return `<button class="record-row" type="button" data-open-record="${date}">
+      <span class="record-date"><strong>${formatDate(date, { month: "numeric", day: "numeric" })}</strong><small>${formatDate(date, { weekday: "short" })}</small></span>
+      <span class="record-preview"><strong>${escapeHtml(previewText(log) || "这一天留下了结构化记录")}</strong><span>${tags.map((tag) => `<i>${escapeHtml(tag)}</i>`).join("")}${log.metadata?.source === "markdown-import" ? "<i>历史导入</i>" : ""}</span></span>
+      <span class="record-arrow" aria-hidden="true">›</span>
+    </button>`;
+  }).join("") : `<p class="empty-state">这个月份还没有记录。日期本身不需要被填满。</p>`;
+  $("#record-detail").hidden = true;
+}
+
+function renderRecordDetail(date) {
+  const log = state.daily_logs_by_date[date];
+  if (!log) return;
+  const detail = $("#record-detail");
+  const imported = log.metadata?.source === "markdown-import";
+  detail.innerHTML = `
+    <div class="record-detail-heading"><button type="button" class="text-button" data-close-record>‹ 返回记录</button><span>${imported ? "历史导入 · 原文保留" : "app 记录"}</span></div>
+    <h2>${formatDate(date, { year: "numeric", month: "long", day: "numeric", weekday: "long" })}</h2>
+    <section class="raw-record"><h3>原始记录</h3><pre>${escapeHtml(log.raw_input || "这一天没有自然语言记录。")}</pre></section>
+    ${renderRecordedDetails(log)}
+    ${log.ai_organized ? `<section class="record-ai"><h3>AI 整理</h3><p>${escapeHtml(log.ai_organized.summary || "")}</p><p>${escapeHtml(log.ai_organized.reflection || "")}</p></section>` : ""}
+    ${renderAiVersions(log)}
+    ${imported ? `<details class="source-proof"><summary>查看原始导入 Markdown</summary><pre>${escapeHtml(log.metadata.source_markdown || "")}</pre></details>` : ""}
+    <div class="record-actions"><button type="button" class="secondary-button" data-edit-date="${date}">编辑这一天</button><button type="button" class="primary-button" data-export-date="${date}">导出这一天</button></div>`;
+  $("#record-list").hidden = true;
+  detail.hidden = false;
+  detail.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderAiVersions(log) {
+  const versions = log.ai_versions || [];
+  if (!versions.length) return "";
+  return `<details class="source-proof"><summary>查看过去 ${versions.length} 版 AI 整理</summary>${versions.slice().reverse().map((version) => `<div class="ai-version-item"><strong>${escapeHtml(version.metadata?.generated_at ? formatTime(version.metadata.generated_at) : "较早版本")}</strong><p>${escapeHtml(version.summary || "")}</p></div>`).join("")}</details>`;
+}
+
+function renderRecordedDetails(log) {
+  const details = log.confirmed_details || {};
+  const blocks = [];
+  for (const type of ["sleep", "movement", "chores", "spiritual", "leisure"]) {
+    const value = details[type];
+    if (!detailHasContent(value)) continue;
+    const lines = [];
+    if (value.tags?.length) lines.push(value.tags.join("，"));
+    if (value.metrics && formatMetrics(value.metrics)) lines.push(formatMetrics(value.metrics));
+    if (value.note) lines.push(value.note);
+    if (value.items?.length) lines.push(`${value.items.length} 个闲暇条目`);
+    blocks.push(`<div><strong>${detailLabels[type]}</strong><p>${escapeHtml(lines.join(" · "))}</p></div>`);
+  }
+  for (const fact of details.ai_facts || []) blocks.push(`<div><strong>${escapeHtml(fact.label || fact.category)}</strong><p>${escapeHtml(fact.value)}</p></div>`);
+  return blocks.length ? `<section class="recorded-details"><h3>已确认的详情</h3>${blocks.join("")}</section>` : "";
+}
+
+function formatMetrics(metrics = {}) {
+  return Object.entries(metrics).filter(([, value]) => value !== "" && value != null).map(([key, value]) => `${metricLabels[key]?.[0] || key} ${value}${metricLabels[key]?.[1] || ""}`).join("，");
+}
+
+function populateLeisureSelects() {
+  $("#leisure-kind").innerHTML = optionHtml(leisureOptions.kind);
+  $("#leisure-status").innerHTML = optionHtml(leisureOptions.status);
+  $("#leisure-context").innerHTML = optionHtml(leisureOptions.context);
+  $("#leisure-feeling").innerHTML = optionHtml(leisureOptions.feeling);
 }
 
 function renderLeisure() {
-  $("#leisure-count").textContent = `${db.leisureItems.length} 个`;
-  const items = [...db.leisureItems].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  $("#leisure-list").innerHTML = items.length
-    ? items.map(renderLeisureCard).join("")
-    : `<article class="leisure-card"><p class="empty-state">还没有闲暇条目。下一次想起一部剧、一本书、一个综艺，就先放这里。</p></article>`;
+  const items = [...state.leisure_items].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+  $("#leisure-count").textContent = `${items.length} 个`;
+  $("#leisure-list").innerHTML = items.length ? items.map((item) => `
+    <article class="leisure-card" data-leisure-id="${escapeHtml(item.id)}">
+      <div class="leisure-meta"><span>${leisureOptions.kind[item.kind] || "其他"}</span><span>${leisureOptions.status[item.status] || "稍后"}</span><span>${leisureOptions.feeling[item.feeling] || "一般"}</span></div>
+      <h3>${escapeHtml(item.title)}</h3>${item.progress ? `<p>进度：${escapeHtml(item.progress)}</p>` : ""}${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}
+      <div class="card-actions"><button type="button" data-log-leisure>记到今天</button><button type="button" data-edit-leisure>编辑</button><button type="button" class="danger" data-delete-leisure>删除</button></div>
+    </article>`).join("") : `<p class="empty-state">还没有闲暇条目。下一次想起一部剧、一本书或一篇文章，可以先放这里。</p>`;
 }
 
-function renderLeisureCard(item) {
-  return `
-    <article class="leisure-card" data-leisure-id="${item.id}">
-      <div class="leisure-meta">
-        <span class="type-badge">${leisureLabels.kind[item.kind] || "其他"}</span>
-        <span class="data-chip">${leisureLabels.status[item.status] || item.status}</span>
-        <span class="data-chip">${leisureLabels.context[item.context] || item.context}</span>
-        <span class="data-chip">${leisureLabels.feeling[item.feeling] || item.feeling}</span>
-      </div>
-      <h3>${escapeHtml(item.title)}</h3>
-      ${item.progress ? `<p>进度：${escapeHtml(item.progress)}</p>` : ""}
-      ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}
-      <div class="card-actions">
-        <button class="mini-button" type="button" data-log-leisure="${item.id}">记到今天</button>
-        <button class="mini-button" type="button" data-edit-leisure="${item.id}">编辑</button>
-        <button class="danger-button" type="button" data-delete-leisure="${item.id}">删除</button>
-      </div>
-    </article>
-  `;
-}
-
-function submitLeisure(event) {
+async function submitLeisure(event) {
   event.preventDefault();
   const title = $("#leisure-title").value.trim();
   if (!title) return;
-  const now = new Date().toISOString();
+  const old = editingLeisureId ? state.leisure_items.find((item) => item.id === editingLeisureId) : null;
   const item = {
-    id: editingLeisureId || uid("leisure"),
-    title,
-    kind: $("#leisure-kind").value,
-    status: $("#leisure-status").value,
-    progress: $("#leisure-progress").value.trim(),
-    context: $("#leisure-context").value,
-    feeling: $("#leisure-feeling").value,
-    note: $("#leisure-note").value.trim(),
-    createdAt: now,
-    updatedAt: now,
+    id: old?.id || uid("leisure"), title, kind: $("#leisure-kind").value, status: $("#leisure-status").value,
+    progress: $("#leisure-progress").value.trim(), context: $("#leisure-context").value, feeling: $("#leisure-feeling").value,
+    note: $("#leisure-note").value.trim(), created_at: old?.created_at || new Date().toISOString(), updated_at: new Date().toISOString(), metadata: old?.metadata || { source: "app" },
   };
-  if (editingLeisureId) {
-    const index = db.leisureItems.findIndex((existing) => existing.id === editingLeisureId);
-    if (index >= 0) item.createdAt = db.leisureItems[index].createdAt || now;
-    if (index >= 0) db.leisureItems[index] = item;
-  } else {
-    db.leisureItems.push(item);
-  }
-  saveDatabase();
-  resetLeisureForm();
-  renderLeisure();
-  renderReview();
+  if (old) Object.assign(old, item); else state.leisure_items.push(item);
+  await persistState(); resetLeisureForm(); renderLeisure(); showToast(old ? "闲暇条目已更新。" : "已放进闲暇清单。");
 }
 
 function resetLeisureForm() {
-  editingLeisureId = null;
-  $("#leisure-form").reset();
-  $("#leisure-form-title").textContent = "添加一个闲暇条目";
-  $("#leisure-submit-button").textContent = "保存闲暇条目";
-  $("#cancel-leisure-edit").hidden = true;
+  editingLeisureId = null; $("#leisure-form").reset(); populateLeisureSelects();
+  $("#leisure-form-title").textContent = "放进闲暇清单"; $("#leisure-submit").textContent = "保存闲暇条目"; $("#cancel-leisure-edit").hidden = true;
 }
 
-function editLeisure(itemId) {
-  const item = db.leisureItems.find((leisure) => leisure.id === itemId);
-  if (!item) return;
-  editingLeisureId = item.id;
-  $("#leisure-title").value = item.title || "";
-  $("#leisure-kind").value = item.kind || "other";
-  $("#leisure-status").value = item.status || "want";
-  $("#leisure-progress").value = item.progress || "";
-  $("#leisure-context").value = item.context || "bored";
-  $("#leisure-feeling").value = item.feeling || "plain";
-  $("#leisure-note").value = item.note || "";
-  $("#leisure-form-title").textContent = "编辑闲暇条目";
-  $("#leisure-submit-button").textContent = "更新闲暇条目";
-  $("#cancel-leisure-edit").hidden = false;
+function editLeisure(id) {
+  const item = state.leisure_items.find((value) => value.id === id); if (!item) return;
+  editingLeisureId = id; $("#leisure-title").value = item.title; $("#leisure-kind").value = item.kind; $("#leisure-status").value = item.status;
+  $("#leisure-progress").value = item.progress; $("#leisure-context").value = item.context; $("#leisure-feeling").value = item.feeling; $("#leisure-note").value = item.note;
+  $("#leisure-form-title").textContent = "编辑闲暇条目"; $("#leisure-submit").textContent = "更新闲暇条目"; $("#cancel-leisure-edit").hidden = false;
   $("#leisure-title").focus();
 }
 
-function deleteLeisure(itemId) {
-  db.leisureItems = db.leisureItems.filter((item) => item.id !== itemId);
-  saveDatabase();
-  renderLeisure();
-  renderReview();
-}
-
-function logLeisureToToday(itemId) {
-  const item = db.leisureItems.find((leisure) => leisure.id === itemId);
-  if (!item) return;
-  currentDate = getTodayKey();
-  db.entries.push({
-    id: uid("entry"),
-    date: currentDate,
-    type: "leisure",
-    text: `${item.title}${item.progress ? `：${item.progress}` : ""}${item.note ? `\n${item.note}` : ""}`,
-    tags: [leisureLabels.kind[item.kind], leisureLabels.feeling[item.feeling]].filter(Boolean),
-    metrics: {},
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
-  saveDatabase();
-  switchView("today-view");
-  $("#save-status").textContent = "已记到今天的生活流。";
+async function handleLeisureClick(event) {
+  const card = event.target.closest("[data-leisure-id]"); if (!card) return;
+  const id = card.dataset.leisureId;
+  if (event.target.closest("[data-edit-leisure]")) editLeisure(id);
+  if (event.target.closest("[data-delete-leisure]")) {
+    if (!window.confirm("删除这个闲暇条目？历史日记不会被删除。")) return;
+    state.leisure_items = state.leisure_items.filter((item) => item.id !== id); await persistState(); renderLeisure();
+  }
+  if (event.target.closest("[data-log-leisure]")) {
+    const log = ensureLog(todayKey()); const detail = log.confirmed_details.leisure || { items: [] };
+    detail.items = [...new Set([...(detail.items || []), id])]; log.confirmed_details.leisure = detail;
+    await persistState(); showToast("已记到今天，不会改变闲暇清单状态。");
+  }
 }
 
 function showBoredSuggestions() {
-  const candidates = db.leisureItems
-    .filter((item) => !["finished", "dropped"].includes(item.status))
-    .map((item) => ({ item, score: leisureScore(item) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map(({ item }) => item);
-  const box = $("#bored-result");
-  box.hidden = false;
-  if (!candidates.length) {
-    box.innerHTML = `<p>现在还没有可选项。可以先放进一部剧、一本书，或者也允许自己真正休息。</p>`;
-    return;
-  }
-  box.innerHTML = `
-    <p>可以从这几个里面选一个，不需要临时刷半小时来找：</p>
-    <ul>
-      ${candidates
-        .map(
-          (item) =>
-            `<li>${escapeHtml(item.title)} · ${leisureLabels.status[item.status]} · ${item.progress ? escapeHtml(item.progress) : leisureLabels.context[item.context]}</li>`,
-        )
-        .join("")}
-    </ul>
-  `;
+  const active = state.leisure_items.filter((item) => ["want", "watching", "paused"].includes(item.status)).sort((a, b) => leisureScore(b) - leisureScore(a)).slice(0, 3);
+  const box = $("#bored-result"); box.hidden = false;
+  box.innerHTML = active.length ? `<strong>现在可以继续：</strong>${active.map((item) => `<span>${escapeHtml(item.title)} · ${leisureOptions.kind[item.kind]}</span>`).join("")}` : "清单里还没有可继续的内容。先放两三项低成本选择就好。";
 }
 
 function leisureScore(item) {
-  let score = 0;
-  if (item.status === "watching") score += 5;
-  if (item.status === "want") score += 3;
-  if (item.context === "bored") score += 3;
-  if (item.context === "low-energy") score += 2;
-  if (["nourishing", "company"].includes(item.feeling)) score += 2;
-  if (item.feeling === "draining") score -= 3;
-  return score;
+  return (item.status === "watching" ? 5 : item.status === "want" ? 3 : 1) + (item.context === "bored" ? 3 : 0) + (["nourishing", "company"].includes(item.feeling) ? 2 : 0) - (item.feeling === "draining" ? 3 : 0);
 }
 
-function lastNDates(n) {
-  const dates = [];
-  const base = dateFromKey(getTodayKey());
-  for (let i = n - 1; i >= 0; i -= 1) {
-    const next = new Date(base);
-    next.setDate(base.getDate() - i);
-    dates.push(getTodayKey(next));
-  }
+function lastDates(count) {
+  const base = dateFromKey(todayKey()); const dates = [];
+  for (let index = count - 1; index >= 0; index -= 1) { const date = new Date(base); date.setDate(base.getDate() - index); dates.push(todayKey(date)); }
   return dates;
 }
 
 function renderReview() {
-  const dates = lastNDates(7);
-  const weekEntries = db.entries.filter((entry) => dates.includes(entry.date));
-  const daysWithRecords = new Set(weekEntries.map((entry) => entry.date));
-  const cards = [];
-  if (daysWithRecords.size < 2) {
-    cards.push(reviewCard("本周记录还不多", ["可以先继续记录，不需要急着总结。等有两三天内容后，复盘会更有参考。"]));
-  }
-  cards.push(reviewCard("记录概况", [`最近 7 天记录了 ${daysWithRecords.size} 天，共 ${weekEntries.length} 条生活流。`, `to-dos 共 ${countTodos(dates)} 条，完成 ${countDoneTodos(dates)} 条。`]));
-  cards.push(reviewCard("睡眠", sleepReview(weekEntries)));
-  cards.push(reviewCard("身体与梦境", [...snippets(weekEntries, ["body", "dream"], 4)]));
-  cards.push(reviewCard("灵修", spiritualReview(weekEntries)));
-  cards.push(reviewCard("庶务", choresReview(weekEntries)));
-  cards.push(reviewCard("运动", movementReview(weekEntries)));
-  cards.push(reviewCard("关系", snippets(weekEntries, ["relationship"], 4)));
-  cards.push(reviewCard("内在与能量", snippets(weekEntries, ["inner"], 4)));
-  cards.push(reviewCard("创造与灵感", snippets(weekEntries, ["creation", "inspiration"], 4)));
-  cards.push(reviewCard("闲暇", leisureReview(weekEntries)));
-  cards.push(reviewCard("下周温和小行动", suggestActions(weekEntries)));
+  const dates = lastDates(7); const logs = dates.map((date) => state.daily_logs_by_date[date]).filter(Boolean); const cards = [];
+  const recorded = logs.filter(hasLogContent);
+  cards.push(reviewCard("记录概况", [`最近 7 天记录了 ${recorded.length} 天。`, `完成 to-dos ${recorded.reduce((sum, log) => sum + (log.todos || []).filter((todo) => todo.done).length, 0)} 项。`]));
+  cards.push(reviewCard("睡眠", sleepReview(logs)));
+  cards.push(reviewCard("身体与梦境", sectionReview(logs, ["身体", "身体状态", "梦境"])));
+  cards.push(reviewCard("庶务管理", choresReview(logs)));
+  cards.push(reviewCard("运动", movementReview(logs)));
+  cards.push(reviewCard("灵修", spiritualReview(logs)));
+  cards.push(reviewCard("内在与能量", sectionReview(logs, ["内在与能量", "清醒时间"])));
+  cards.push(reviewCard("关系", sectionReview(logs, ["关系"])));
+  cards.push(reviewCard("创造与灵感", sectionReview(logs, ["创造", "灵感"])));
+  cards.push(reviewCard("闲暇", leisureReview(logs)));
+  cards.push(reviewCard("下周可以轻轻尝试", suggestActions(logs)));
   $("#review-content").innerHTML = cards.join("");
 }
 
 function reviewCard(title, lines) {
   const clean = lines.filter(Boolean);
-  return `
-    <article class="review-card">
-      <h3>${title}</h3>
-      ${clean.length ? `<ul>${clean.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : `<p>这一项暂时没有太多内容。</p>`}
-    </article>
-  `;
+  return `<article class="review-card"><h2>${title}</h2>${clean.length ? `<ul>${clean.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : `<p>这一项暂时没有太多内容。</p>`}</article>`;
 }
 
-function entriesOf(entries, type) {
-  return entries.filter((entry) => entry.type === type);
+function sleepReview(logs) {
+  const values = logs.map((log) => log.confirmed_details?.sleep).filter(detailHasContent);
+  if (!values.length) return ["本周还没有睡眠记录，可以先继续轻量观察。"];
+  const hours = values.map((v) => Number(v.metrics?.sleepHours)).filter(Boolean); const naps = values.map((v) => Number(v.metrics?.napMinutes)).filter(Boolean); const recovery = values.map((v) => Number(v.metrics?.sleepRecovery)).filter(Boolean);
+  const tags = countTags(values); const signals = ["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适"].filter((tag) => tags[tag]).map((tag) => `${tag} ${tags[tag]} 次`);
+  return [`记录睡眠 ${values.length} 天。`, hours.length ? `平均睡眠时长约 ${(hours.reduce((a, b) => a + b, 0) / hours.length).toFixed(1)} 小时。` : "", naps.length ? `午睡/补觉 ${naps.length} 次，共 ${naps.reduce((a, b) => a + b, 0)} 分钟。` : "", recovery.length ? `平均恢复感 ${(recovery.reduce((a, b) => a + b, 0) / recovery.length).toFixed(1)}/5。` : "", signals.length ? `出现：${signals.join("，")}。` : ""];
 }
 
-function uniqueDays(entries) {
-  return new Set(entries.map((entry) => entry.date)).size;
+function movementReview(logs) {
+  const values = logs.map((log) => log.confirmed_details?.movement).filter(detailHasContent); const tags = countTags(values);
+  const minutes = values.reduce((sum, v) => sum + Number(v.metrics?.movementMinutes || 0), 0); const km = values.reduce((sum, v) => sum + Number(v.metrics?.walkKm || 0), 0);
+  return [values.length ? `运动记录 ${values.length} 天。` : "本周还没有结构化运动记录。", minutes ? `总运动时长约 ${minutes} 分钟。` : "", km ? `散步/走路约 ${km.toFixed(1)} 公里。` : "", Object.keys(tags).length ? `项目：${formatCounts(tags)}。` : ""];
 }
 
-function countTags(entries) {
-  const counts = {};
-  for (const entry of entries) {
-    for (const tag of entry.tags || []) counts[tag] = (counts[tag] || 0) + 1;
-  }
-  return counts;
+function choresReview(logs) {
+  const values = logs.map((log) => log.confirmed_details?.chores).filter(detailHasContent); const tags = countTags(values);
+  return [Object.keys(tags).length ? formatCounts(tags) : "洗澡、洗衣、排便和自我按摩还没有形成可统计记录。"];
+}
+
+function spiritualReview(logs) {
+  const values = logs.map((log) => log.confirmed_details?.spiritual).filter(detailHasContent); const tags = countTags(values);
+  return [`灵修相关记录 ${values.length} 天。`, Object.keys(tags).length ? `实践：${formatCounts(tags)}。` : "", ...sectionReview(logs, ["灵修"], 2)];
+}
+
+function leisureReview(logs) {
+  const ids = new Set(logs.flatMap((log) => log.confirmed_details?.leisure?.items || [])); const active = state.leisure_items.filter((item) => ["want", "watching", "paused"].includes(item.status));
+  return [ids.size ? `本周记到当天的闲暇内容 ${ids.size} 个。` : "本周还没有把闲暇内容记到具体日期。", active.length ? `清单里有 ${active.length} 个可继续的选择。` : "清单里暂时没有可继续的内容。", ...active.slice(0, 3).map((item) => `${item.title}：${leisureOptions.status[item.status]}${item.progress ? `，${item.progress}` : ""}`)];
+}
+
+function sectionReview(logs, titles, limit = 3) {
+  const found = [];
+  for (const log of logs) for (const section of log.legacy_sections || []) if (titles.includes(section.title) && section.content) found.push(`${log.date}：${section.content.replace(/\s+/g, " ").slice(0, 100)}`);
+  for (const log of logs) for (const fact of log.confirmed_details?.ai_facts || []) if (titles.includes(fact.label) || titles.includes(fact.category)) found.push(`${log.date}：${fact.value.slice(0, 100)}`);
+  return found.slice(-limit);
+}
+
+function countTags(values) {
+  const counts = {}; for (const value of values) for (const tag of value.tags || []) counts[tag] = (counts[tag] || 0) + 1; return counts;
 }
 
 function formatCounts(counts) {
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => `${label} ${count} 次`)
-    .join("，");
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name} ${count} 次`).join("，");
 }
 
-function sumMetric(entries, metric) {
-  return entries.reduce((sum, entry) => sum + Number(entry.metrics?.[metric] || 0), 0);
-}
-
-function sleepReview(entries) {
-  const sleep = entriesOf(entries, "sleep");
-  if (!sleep.length) return ["本周还没有睡眠记录。可以先轻量记录 2-3 天，不急着总结。"];
-
-  const hours = sleep.map((entry) => Number(entry.metrics?.sleepHours || 0)).filter(Boolean);
-  const avg = hours.length ? (hours.reduce((a, b) => a + b, 0) / hours.length).toFixed(1) : "";
-  const napEntries = sleep.filter((entry) => Number(entry.metrics?.napMinutes || 0) > 0 || entry.tags?.includes("午睡/补觉") || entry.tags?.includes("午休/补觉"));
-  const napTotal = sumMetric(sleep, "napMinutes");
-  const recoveries = sleep.map((entry) => Number(entry.metrics?.sleepRecovery || 0)).filter((value) => value >= 1);
-  const avgRecovery = recoveries.length ? (recoveries.reduce((a, b) => a + b, 0) / recoveries.length).toFixed(1) : "";
-  const tags = countTags(sleep);
-  const signalLabels = ["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适"];
-  const signalText = signalLabels.filter((label) => tags[label]).map((label) => `${label} ${tags[label]} 次`).join("，");
-  const lines = [
-    `睡眠记录 ${sleep.length} 条，覆盖 ${uniqueDays(sleep)} 天。`,
-    avg ? `记录睡眠时长的 ${hours.length} 天里，平均约 ${avg} 小时。` : "",
-    napEntries.length ? `午睡/补觉 ${napEntries.length} 次，总时长约 ${napTotal || 0} 分钟。` : "",
-    avgRecovery ? `平均恢复感约 ${avgRecovery}/5。` : "",
-    signalText ? `本周出现：${signalText}。` : "",
-  ];
-  if ((tags["环境噪音"] || 0) + (tags["鸟叫"] || 0) >= 2) {
-    lines.push("环境干扰出现较多，可以继续观察耳塞、窗户、白噪音或入睡时间是否有帮助。");
-  }
-  if ((tags["入睡困难"] || 0) + (tags["躺下但没睡意"] || 0) >= 2) {
-    lines.push("入睡前状态值得继续观察，尤其是睡前活动、屏幕、聊天、压力和身体疲劳之间的关系。");
-  }
-  return lines;
-}
-
-function spiritualReview(entries) {
-  const spiritual = entriesOf(entries, "spiritual");
-  const tags = formatCounts(countTags(spiritual));
-  return [`灵修相关记录 ${uniqueDays(spiritual)} 天。`, tags ? `本周出现：${tags}。` : "", ...snippets(entries, ["spiritual"], 2)];
-}
-
-function choresReview(entries) {
-  const chores = entriesOf(entries, "chores");
-  const counts = formatCounts(countTags(chores));
-  return [counts || "洗澡、洗衣、排便、自我按摩还没有形成可统计记录。"];
-}
-
-function movementReview(entries) {
-  const movement = entriesOf(entries, "movement");
-  const minutes = sumMetric(movement, "movementMinutes");
-  const km = sumMetric(movement, "walkKm");
-  const counts = formatCounts(countTags(movement));
-  return [
-    `运动记录 ${movement.length} 条，覆盖 ${uniqueDays(movement)} 天。`,
-    minutes ? `总运动时长约 ${minutes} 分钟。` : "",
-    km ? `散步/走路约 ${km.toFixed(1)} 公里。` : "",
-    counts ? `项目分布：${counts}。` : "",
-  ];
-}
-
-function leisureReview(entries) {
-  const leisureEntries = entriesOf(entries, "leisure");
-  const active = db.leisureItems.filter((item) => ["want", "watching", "paused"].includes(item.status));
-  const finished = db.leisureItems.filter((item) => item.status === "finished");
-  return [
-    `生活流里有 ${leisureEntries.length} 条闲暇记录。`,
-    active.length ? `当前清单里有 ${active.length} 个可继续的闲暇条目。` : "闲暇清单还不多，可以先放 2-3 个低成本选择。",
-    finished.length ? `已看完/读完 ${finished.length} 个。` : "",
-    ...active.slice(0, 3).map((item) => `${item.title}：${leisureLabels.status[item.status]}${item.progress ? `，${item.progress}` : ""}`),
-  ];
-}
-
-function snippets(entries, types, limit = 4) {
-  return entries
-    .filter((entry) => types.includes(entry.type) && entry.text)
-    .slice(-limit)
-    .map((entry) => `${entry.date}：${entry.text.slice(0, 90)}`);
-}
-
-function countTodos(dates) {
-  return dates.reduce((sum, date) => sum + getTodos(date).length, 0);
-}
-
-function countDoneTodos(dates) {
-  return dates.reduce((sum, date) => sum + getTodos(date).filter((todo) => todo.done).length, 0);
-}
-
-function suggestActions(entries) {
+function suggestActions(logs) {
   const actions = [];
-  if (!entriesOf(entries, "spiritual").length) actions.push("给灵修留一个很小的入口：祷告两分钟或读一小段都算。");
-  if (uniqueDays(entriesOf(entries, "movement")) < 3) actions.push("给身体一个低门槛动作：八段锦、拉伸或走路 10 分钟。");
-  if (!entriesOf(entries, "chores").some((entry) => entry.tags?.includes("排便"))) actions.push("庶务里继续轻量记录排便和洗澡，先观察规律。");
-  if (!db.leisureItems.length) actions.push("放 2-3 个闲暇条目，给无聊时刻一个更有边界的选择。");
+  if (logs.map((log) => log.confirmed_details?.sleep).filter(detailHasContent).length < 3) actions.push("给睡眠留一个很小的入口，只记时长或恢复感也可以。");
+  if (logs.map((log) => log.confirmed_details?.movement).filter(detailHasContent).length < 2) actions.push("给身体十分钟低门槛活动，不需要完整训练。");
+  if (!state.leisure_items.some((item) => ["want", "watching"].includes(item.status))) actions.push("给无聊时刻留两三个能继续的内容选择。");
   if (!actions.length) actions.push("继续保持现在这种轻量记录，不需要把生活写满。");
   return actions.slice(0, 3);
 }
 
-function exportJson() {
-  download(`life-log-backup-${getTodayKey()}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), ...db }, null, 2), "application/json;charset=utf-8");
-}
-
-function exportMarkdown() {
-  const dates = [...new Set([...db.entries.map((entry) => entry.date), ...Object.keys(db.todosByDate)])].sort();
-  const sections = dates.map(markdownForDate).filter(Boolean);
-  if (db.leisureItems.length) sections.push(markdownForLeisure());
-  download(`life-log-${getTodayKey()}.md`, sections.join("\n\n---\n\n"), "text/markdown;charset=utf-8", true);
-}
-
 function markdownForDate(date) {
+  const log = state.daily_logs_by_date[date]; if (!log) return "";
   const parts = [`# ${date}`];
-  const todos = getTodos(date);
-  if (todos.length) {
-    parts.push(`## to-dos\n${todos.map((todo) => `- [${todo.done ? "x" : " "}] ${todo.text}`).join("\n")}`);
+  if (log.todos?.length) parts.push(`## to-dos\n${log.todos.map((todo) => `- [${todo.done ? "x" : " "}] ${todo.text}`).join("\n")}`);
+  if (log.raw_input?.trim()) parts.push(`## 原始记录\n${log.raw_input.trim()}`);
+  const details = [];
+  for (const [type, value] of Object.entries(log.confirmed_details || {})) {
+    if (type === "ai_facts") continue;
+    const lines = [];
+    if (value.tags?.length) lines.push(`选项：${value.tags.join("，")}`);
+    if (formatMetrics(value.metrics || {})) lines.push(`数据：${formatMetrics(value.metrics)}`);
+    for (const [key, text] of Object.entries(value.extras || {})) if (text) lines.push(`${key === "bedtimeActivity" ? "睡前活动" : key === "sleepFactors" ? "影响睡眠的因素" : key}：${text}`);
+    if (value.note) lines.push(value.note);
+    if (value.items?.length) lines.push(`闲暇条目：${value.items.map((id) => state.leisure_items.find((item) => item.id === id)?.title).filter(Boolean).join("，")}`);
+    if (lines.length) details.push(`### ${detailLabels[type] || type}\n${lines.join("\n")}`);
   }
-  for (const entry of getEntries(date)) {
-    const type = findType(entry.type).label;
-    const meta = [];
-    if (entry.tags?.length) meta.push(`选项：${entry.tags.join("，")}`);
-    const metricText = formatMetricText(entry.metrics);
-    if (metricText) meta.push(`数据：${metricText}`);
-    const extrasText = formatExtrasText(entry.extras);
-    if (extrasText) meta.push(extrasText);
-    parts.push(`## ${type} · ${formatTime(entry.createdAt)}\n${meta.join("\n")}${meta.length ? "\n" : ""}${entry.text || ""}`.trim());
-  }
-  return parts.length > 1 ? parts.join("\n\n") : "";
+  if (details.length) parts.push(`## 已确认详情\n${details.join("\n\n")}`);
+  if (log.ai_organized) parts.push(`## AI 整理\n${log.ai_organized.summary || ""}\n\n${log.ai_organized.reflection || ""}`.trim());
+  if (log.metadata?.source_markdown) parts.push(`## 原始导入来源\n${log.metadata.source_markdown}`);
+  return parts.join("\n\n");
 }
 
 function markdownForLeisure() {
-  const lines = ["# 闲暇清单"];
-  for (const item of db.leisureItems) {
-    lines.push(
-      `## ${item.title}\n类型：${leisureLabels.kind[item.kind] || item.kind}\n状态：${leisureLabels.status[item.status] || item.status}\n进度：${item.progress || "未填写"}\n适合：${leisureLabels.context[item.context] || item.context}\n感受：${leisureLabels.feeling[item.feeling] || item.feeling}\n${item.note || ""}`.trim(),
-    );
-  }
-  return lines.join("\n\n");
+  if (!state.leisure_items.length) return "";
+  return ["# 闲暇清单", ...state.leisure_items.map((item) => `## ${item.title}\n类型：${leisureOptions.kind[item.kind] || "其他"}\n状态：${leisureOptions.status[item.status] || "稍后"}\n进度：${item.progress || "未填写"}\n适合：${leisureOptions.context[item.context] || "无聊时"}\n感受：${leisureOptions.feeling[item.feeling] || "一般"}\n${item.note || ""}`.trim())].join("\n\n");
 }
 
-function formatMetricText(metrics = {}) {
-  return Object.entries(metrics)
-    .filter(([, value]) => value !== "" && value != null)
-    .map(([key, value]) => `${metricLabels[key] || key} ${value}${metricUnits[key] || ""}`)
-    .join("，");
+function exportAllJson() {
+  download(`life-log-backup-${todayKey()}.json`, JSON.stringify({ exported_at: new Date().toISOString(), ...state }, null, 2), "application/json;charset=utf-8");
+  showToast("完整备份已导出，app 内记录仍然保留。");
 }
 
-function formatExtrasText(extras = {}) {
-  return Object.entries(extras)
-    .filter(([, value]) => value)
-    .map(([key, value]) => `${extraLabels[key] || key}：${value}`)
-    .join("\n");
-}
-function download(filename, content, type, withBom = false) {
-  const body = withBom ? `\ufeff${content}` : content;
-  const blob = new Blob([body], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+function exportAllMarkdown() {
+  const content = [...recordedDates()].reverse().map(markdownForDate).filter(Boolean); const leisure = markdownForLeisure(); if (leisure) content.push(leisure);
+  download(`life-log-${todayKey()}.md`, content.join("\n\n---\n\n"), "text/markdown;charset=utf-8");
+  showToast("Markdown 已导出，app 内记录没有变化。");
 }
 
-function importBackup(file) {
+function exportDate(date) {
+  download(`life-log-${date}.md`, markdownForDate(date), "text/markdown;charset=utf-8");
+}
+
+async function importBackup(file) {
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      if (parsed.version === 4 || parsed.entries || parsed.leisureItems) {
-        db.entries = mergeById(db.entries, parsed.entries || []);
-        db.leisureItems = mergeById(db.leisureItems, parsed.leisureItems || []);
-        db.todosByDate = { ...db.todosByDate, ...(parsed.todosByDate || {}) };
-        db.durationsByDate = { ...db.durationsByDate, ...(parsed.durationsByDate || {}) };
-      } else {
-        migrateLegacyRecords(db, parsed);
-      }
-      saveDatabase();
-      renderAll();
-      alert("备份已导入。");
-    } catch {
-      alert("导入失败：这个文件不像 Life Log 备份。");
+  try {
+    const incoming = JSON.parse(await file.text());
+    if (!incoming.daily_logs_by_date || !Array.isArray(incoming.leisure_items)) throw new Error("这不是可识别的 Life Log 备份");
+    if (!window.confirm("导入会合并记录；同一天已有内容时，保留更新时间较新的版本。继续吗？")) return;
+    for (const [date, log] of Object.entries(incoming.daily_logs_by_date)) {
+      const current = state.daily_logs_by_date[date];
+      if (!current || new Date(log.metadata?.updated_at || 0) > new Date(current.metadata?.updated_at || 0)) state.daily_logs_by_date[date] = log;
     }
-  };
-  reader.readAsText(file);
+    const map = new Map(state.leisure_items.map((item) => [item.id, item]));
+    for (const item of incoming.leisure_items) if (item?.id) map.set(item.id, normalizeLeisure(item));
+    state.leisure_items = [...map.values()];
+    await persistState(); renderAll(); showToast("备份已合并，原有较新记录得到保留。");
+  } catch (error) { showToast(error.message || "导入失败"); }
+  $("#import-file").value = "";
 }
 
-function mergeById(existing, incoming) {
-  const map = new Map(existing.map((item) => [item.id, item]));
-  for (const item of incoming) {
-    if (item?.id) map.set(item.id, item);
-  }
-  return [...map.values()];
+function renderSettings() {
+  $("#ai-api-url").value = state.settings.ai_api_url || "";
+  $("#ai-access-code").value = state.settings.ai_access_code || "";
+  renderStorageStatus();
+}
+
+function renderStorageStatus() {
+  const target = $("#storage-status"); if (!target) return;
+  target.textContent = `当前保存 ${recordedDates().length} 天记录、${state.leisure_items.length} 个闲暇条目。${db ? "使用 IndexedDB 持久存储。" : "当前使用本地备用存储。"}`;
+}
+
+async function saveAiSettings(event) {
+  event.preventDefault();
+  state.settings.ai_api_url = $("#ai-api-url").value.trim();
+  state.settings.ai_access_code = $("#ai-access-code").value;
+  await persistState(); $("#ai-settings-status").textContent = "AI 设置已保存在这台设备；OpenAI API Key 不在前端。"; showToast("AI 设置已保存。");
 }
 
 function switchView(viewId, options = {}) {
   activeView = viewId;
-  if (viewId === "today-view" && !options.keepDate) currentDate = getTodayKey();
-  if (!options.keepEditing) resetEntryForm();
-  $$(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
-  $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.view === viewId));
-  renderAll();
+  if (viewId === "today-view" && !options.keepDate) currentDate = todayKey();
+  $$(".app-view").forEach((view) => view.classList.toggle("active", view.id === viewId));
+  $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.viewTarget === viewId));
+  if (viewId === "today-view") renderToday();
+  if (viewId === "records-view") { $("#record-list").hidden = false; renderRecords(); }
+  if (viewId === "leisure-view") renderLeisure();
+  if (viewId === "review-view") renderReview();
+  if (viewId === "backup-view") renderSettings();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function renderAll() {
-  renderToday();
-  renderRecords();
-  renderLeisure();
-  renderReview();
+function renderDuration() {
+  const minutes = Math.round(Number(state.durations_by_date[currentDate] || 0) / 60000);
+  $("#duration-note").textContent = `今日在这里停留约 ${minutes} 分钟`;
+}
+
+function trackDuration() {
+  const now = Date.now(); const active = document.visibilityState === "visible" && activeView === "today-view" && now - lastInteractionAt < 120000;
+  if (active) state.durations_by_date[currentDate] = Number(state.durations_by_date[currentDate] || 0) + Math.min(now - lastDurationTick, 30000);
+  lastDurationTick = now; renderDuration(); if (active) persistState();
 }
 
 function checkDateRoll() {
-  const today = getTodayKey();
-  if (today === lastTodayKey) return;
-  const previousToday = lastTodayKey;
-  lastTodayKey = today;
-  const hasDraft = $("#entry-text") && $("#entry-text").value.trim();
-  if (activeView === "today-view" && currentDate === previousToday && !editingEntryId && !hasDraft) {
-    currentDate = today;
-    renderAll();
-    $("#save-status").textContent = "新的一天已经开始，已自动切到今天。";
-  } else {
-    renderHistoryNotice(`今天已经是 ${today}。你当前内容不会被移动；需要时点“回到今天”。`);
-  }
+  const today = todayKey(); if (today === lastToday) return;
+  const previous = lastToday; lastToday = today;
+  if (activeView === "today-view" && currentDate === previous && !$("#raw-input").value.trim()) { currentDate = today; renderToday(); showToast("新的一天已经开始，已自动切到今天。"); }
 }
 
-function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker
-    .register("./sw.js", { updateViaCache: "none" })
-    .then((registration) => {
-      registration.update();
-      if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
-    })
-    .catch(() => {});
+function renderAll() {
+  renderToday(); renderRecords(); renderLeisure(); renderReview(); renderSettings();
 }
 
 function bindEvents() {
-  document.addEventListener("click", markInteraction);
-  document.addEventListener("input", markInteraction);
-  document.addEventListener("touchstart", markInteraction, { passive: true });
-
+  document.addEventListener("click", () => { lastInteractionAt = Date.now(); });
+  document.addEventListener("input", () => { lastInteractionAt = Date.now(); });
+  $$('[data-view-target]').forEach((button) => button.addEventListener("click", () => switchView(button.dataset.viewTarget)));
+  $("#return-today").addEventListener("click", () => { currentDate = todayKey(); renderToday(); });
+  $("#raw-input").addEventListener("input", scheduleRawSave);
+  $("#save-button").addEventListener("click", saveNow);
+  $("#organize-button").addEventListener("click", organizeToday);
+  $("#confirm-button").addEventListener("click", confirmAi);
+  $("#adjust-button").addEventListener("click", adjustAi);
   $("#todo-form").addEventListener("submit", addTodo);
-  $("#todo-list").addEventListener("change", (event) => {
-    const item = event.target.closest("[data-todo-id]");
-    if (item && event.target.matches("input[type='checkbox']")) toggleTodo(item.dataset.todoId, event.target.checked);
+  $("#todo-list").addEventListener("click", handleTodoClick);
+  $("#todo-list").addEventListener("change", handleTodoClick);
+  $("#detail-stack").addEventListener("input", saveDetailFromEvent);
+  $("#detail-stack").addEventListener("change", saveDetailFromEvent);
+  $("#detail-stack").addEventListener("click", (event) => { if (event.target.closest("#save-daily-leisure")) saveDailyLeisure(); });
+  $("#detail-stack").addEventListener("toggle", (event) => {
+    const panel = event.target.closest(".detail-panel"); if (!panel?.open) return;
+    $$(".detail-panel").forEach((other) => { if (other !== panel) other.open = false; });
+  }, true);
+  $("#record-month").addEventListener("change", (event) => { selectedMonth = event.target.value; renderRecords(); });
+  $("#show-all-records").addEventListener("click", () => { selectedMonth = ""; renderRecords(); });
+  $("#record-list").addEventListener("click", (event) => { const row = event.target.closest("[data-open-record]"); if (row) renderRecordDetail(row.dataset.openRecord); });
+  $("#record-detail").addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-record]")) { $("#record-detail").hidden = true; $("#record-list").hidden = false; }
+    const edit = event.target.closest("[data-edit-date]"); if (edit) { currentDate = edit.dataset.editDate; switchView("today-view", { keepDate: true }); }
+    const exportButton = event.target.closest("[data-export-date]"); if (exportButton) exportDate(exportButton.dataset.exportDate);
   });
-  $("#todo-list").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-delete-todo]");
-    if (button) deleteTodo(button.dataset.deleteTodo);
-  });
-
-  $("#entry-form").addEventListener("submit", submitEntry);
-  $("#entry-type-grid").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-entry-type]");
-    if (!button) return;
-    currentType = button.dataset.entryType;
-    renderTypeGrid();
-    renderDetailBox();
-  });
-  $("#entry-detail-box").addEventListener("change", (event) => {
-    const label = event.target.closest(".choice-pill");
-    if (label) label.classList.toggle("active", event.target.checked);
-  });
-  $("#cancel-edit-button").addEventListener("click", resetEntryForm);
-  $("#jump-today-button").addEventListener("click", () => {
-    currentDate = getTodayKey();
-    renderAll();
-  });
-
-  document.body.addEventListener("click", (event) => {
-    const edit = event.target.closest("[data-edit-entry]");
-    const remove = event.target.closest("[data-delete-entry]");
-    const open = event.target.closest("[data-open-entry]");
-    if (edit) editEntry(edit.dataset.editEntry);
-    if (remove) deleteEntry(remove.dataset.deleteEntry);
-    if (open) openEntryDate(open.dataset.openEntry);
-  });
-
-  $(".bottom-nav").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-view]");
-    if (button) switchView(button.dataset.view);
-  });
-
-  $("#record-date-input").addEventListener("change", (event) => {
-    selectedRecordDate = event.target.value || getTodayKey();
-    renderRecords();
-  });
-  $("#record-type-filter").addEventListener("change", (event) => {
-    selectedRecordType = event.target.value || "all";
-    renderRecords();
-  });
-
+  $("#export-all-from-records").addEventListener("click", exportAllMarkdown);
   $("#leisure-form").addEventListener("submit", submitLeisure);
   $("#cancel-leisure-edit").addEventListener("click", resetLeisureForm);
+  $("#leisure-list").addEventListener("click", handleLeisureClick);
   $("#bored-button").addEventListener("click", showBoredSuggestions);
-  $("#leisure-list").addEventListener("click", (event) => {
-    const edit = event.target.closest("[data-edit-leisure]");
-    const remove = event.target.closest("[data-delete-leisure]");
-    const log = event.target.closest("[data-log-leisure]");
-    if (edit) editLeisure(edit.dataset.editLeisure);
-    if (remove) deleteLeisure(remove.dataset.deleteLeisure);
-    if (log) logLeisureToToday(log.dataset.logLeisure);
-  });
-
-  $("#export-json").addEventListener("click", exportJson);
-  $("#export-md").addEventListener("click", exportMarkdown);
+  $("#export-json").addEventListener("click", exportAllJson);
+  $("#export-md").addEventListener("click", exportAllMarkdown);
   $("#import-file").addEventListener("change", (event) => importBackup(event.target.files[0]));
-
-  document.addEventListener("visibilitychange", () => {
-    trackDuration();
-    if (document.visibilityState === "visible") checkDateRoll();
-  });
+  $("#ai-settings-form").addEventListener("submit", saveAiSettings);
+  document.addEventListener("visibilitychange", () => { trackDuration(); if (document.visibilityState === "visible") checkDateRoll(); });
   window.addEventListener("focus", checkDateRoll);
-  setInterval(() => {
-    trackDuration();
-    checkDateRoll();
-  }, 15000);
 }
 
-function init() {
-  selectedRecordDate = currentDate;
-  renderTypeGrid();
-  renderDetailBox();
-  renderAll();
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((registration) => registration.update()).catch(() => {});
+}
+
+async function init() {
+  state = await loadState();
+  migrateV4();
+  await persistState();
+  populateLeisureSelects();
   bindEvents();
+  renderAll();
   registerServiceWorker();
+  setInterval(trackDuration, 30000);
+  setInterval(checkDateRoll, 60000);
 }
 
 init();
-
-
-
-
-
-

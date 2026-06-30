@@ -1,49 +1,42 @@
-﻿# Life Log v4
+# Life Log v5
 
-这是 Life Log 的生活流重构版。
+一个本地优先、叙事驱动的生命力日志。
 
-## 这版包含
+## 这一版包含
 
-- 睡眠记录增强：入睡困难、躺下无睡意、早醒、环境噪音、鸟叫、睡前活动、午睡/补觉和恢复感。
-- 闲暇类型补全：剧、综艺、游戏、书、纪录片、视频、电影、其他。
+- 今日只有一个自然记录入口，内容自动保存到设备。
+- 睡眠、运动、庶务、闲暇和灵修按需展开，不必每天填完整。
+- 每日记录按日期持续保留，可查看、编辑、追溯和单日导出。
+- 闲暇支持剧、综艺、游戏、书、文章、纪录片、视频、电影和其他。
+- JSON 备份和 Markdown 导出只生成副本，不会删除 app 内数据。
+- AI 整理按需调用；原始记录和 AI 结果分开保存，并保留最近 5 个旧版本。
 
-- 今日页自动跟随真实日期，不需要每天手动改日期。
-- 今日页改成 to-dos、快速捕捉和生活流卡片。
-- 新增闲暇模块，用来记录剧、综艺、书、电影和其他轻内容。
-- 周复盘基于最近 7 天的卡片、to-dos、运动、睡眠、庶务、灵修、关系和闲暇整理。
-- 导出 Markdown 使用 UTF-8，并隐藏内部字段名。
-- 本地优先保存，不需要登录、云同步、数据库或 AI API。
+## 私密历史导入
 
-## 上传到 GitHub Pages
+私密历史记录不放在公开网站目录中。部署网站后，在 app 的“备份”页面导入：
 
-把这个文件夹里的所有文件上传到仓库根目录：
+`D:\CodexProjects\life-log-private-history-20260630.json`
 
-```text
-index.html
-app.js
-styles.css
-icon.svg
-manifest.webmanifest
-sw.js
-README.md
-_redirects
-netlify.toml
-.nojekyll
-```
+它包含 2026-06-18 至 2026-06-29 的 11 天历史记录和 4 个闲暇条目，并保留原始 Markdown 来源。导入只需一次，此后记录继续保存在当前设备中。
 
-然后在 GitHub 仓库：
+## GitHub Pages
 
-```text
-Settings -> Pages -> Build and deployment -> Deploy from a branch
-Branch: main
-Folder: /root
-```
+1. 只上传本目录根部的网页文件，不要上传 `worker` 文件夹。
+2. 不要上传上述私密 JSON 或 `life-log-private-source-20260630`。
+3. 在 GitHub 仓库的 `Settings > Pages` 中选择 `Deploy from a branch`，分支选 `main`，目录选 `/ (root)`。
+4. 等待部署完成后，用 Pages 提供的网址打开。
 
-保存后等待 Pages 发布完成。
+本项目不依赖 Netlify。
 
-## iPhone 使用
+## AI Worker
 
-用 Safari 打开发布后的网址，然后点分享按钮，选择“添加到主屏幕”。
+`worker` 文件夹是独立的 Cloudflare Worker。当前允许来源已配置为：
 
-记录保存在 iPhone 浏览器本地。换手机、清理浏览器数据或换浏览器前，请先导出 JSON 备份。
+`https://b5s474n4f8-ship-it.github.io`
 
+部署前需要在 Cloudflare 设置两个 secret：
+
+- `OPENAI_API_KEY`
+- `APP_ACCESS_CODE`
+
+部署 Worker 后，在 app 的“备份”页面填写 Worker 的 `/api/organize-log` 地址和访问口令。OpenAI API Key 不得填写到网页前端。Worker 不使用数据库，请求使用 `store: false`。
