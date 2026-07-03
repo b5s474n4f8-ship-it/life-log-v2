@@ -10,8 +10,8 @@
     <link rel="icon" href="./icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css" />
-    <link rel="stylesheet" href="./app-v5.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260703" />
+    <link rel="stylesheet" href="./app-v5.css?v=20260703" />
   </head>
   <body>
     <header class="app-header" id="top">
@@ -76,7 +76,7 @@
           </div>
 
           <aside class="side-column" aria-label="今日辅助记录">
-            <details class="todo-panel" open>
+            <details class="todo-panel">
               <summary><span><strong>to-dos</strong><small>今天要托住的事</small></span><span id="todo-count" class="count-label">0/0</span></summary>
               <div id="todo-list" class="todo-list"></div>
               <form id="todo-form" class="todo-form">
@@ -160,6 +160,6 @@
       </form>
     </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <script src="./app.js" defer></script>
+    <script src="./app.js?v=20260703" defer></script>
   </body>
 </html>

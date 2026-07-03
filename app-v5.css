@@ -134,3 +134,58 @@
 .remove-button { width: 44px; min-height: 44px; }
 .chip-checks span, .segmented-control span { min-height: 42px; }
 .card-actions button { min-height: 42px; }
+
+/* Mobile visual pass 2026-07-03 */
+html, body { max-width: 100%; overflow-x: hidden; }
+.app-view, .workspace, .primary-column, .side-column { min-width: 0; }
+textarea, input, select { max-width: 100%; min-width: 0; }
+
+@media (max-width: 860px) {
+  .workspace { align-items: stretch; width: 100%; }
+  .primary-column, .todo-panel, .details-section, .duration-note { width: 100%; max-width: 100%; }
+}
+
+@media (max-width: 560px) {
+  .app-header, .page-shell { width: calc(100% - 28px); max-width: 100%; }
+  .app-header { min-height: 66px; }
+  .brand { gap: 9px; }
+  .brand img { width: 38px; height: 38px; border-radius: 8px; }
+  .brand strong { font-size: 15px; }
+  .brand small { font-size: 10px; }
+  .local-badge { gap: 6px; }
+
+  .page-shell { padding: 21px 0 calc(88px + env(safe-area-inset-bottom)); }
+  .day-heading { margin-bottom: 17px; padding: 0 2px; }
+  .day-heading > p:first-child { margin-bottom: 5px; font-size: 12px; }
+  .day-heading h1 { margin-bottom: 8px; font-size: 36px; line-height: 1.05; }
+  .day-heading > p:last-child { font-size: 15px; line-height: 1.65; }
+  .workspace { gap: 12px; }
+
+  .journal-section, .ai-section { padding: 17px 15px; }
+  .todo-panel > summary { min-height: 66px; }
+  .section-heading { margin-bottom: 14px; }
+  .section-heading h2, .details-intro h2 { font-size: 20px; }
+  #raw-input { min-height: 190px; padding: 15px; font-size: 16px; line-height: 1.75; }
+  .save-row { margin: 9px 1px 14px; }
+  .main-actions { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 8px; }
+  .main-actions button { width: 100%; min-width: 0; padding-inline: 10px; }
+
+  .view-heading { gap: 12px; margin-bottom: 18px; padding-bottom: 16px; }
+  .view-heading h1 { font-size: 30px; }
+  .record-row { min-height: 78px; }
+
+  .bottom-nav {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    border: 0;
+    border-top: 1px solid rgba(57, 79, 75, 0.14);
+    border-radius: 0;
+    background: rgba(255, 255, 253, 0.94);
+    box-shadow: 0 -8px 24px rgba(41, 62, 57, 0.08);
+    transform: none;
+  }
+  .nav-button { min-height: 50px; border-radius: 6px; }
+  .nav-button > span { width: 25px; height: 25px; border-radius: 6px; }
+}

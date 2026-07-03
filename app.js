@@ -273,8 +273,9 @@ function updateWordCount() {
 
 function autoResize() {
   const input = $("#raw-input");
+  const minimum = window.matchMedia("(max-width: 560px)").matches ? 190 : 230;
   input.style.height = "auto";
-  input.style.height = `${Math.max(230, Math.min(input.scrollHeight, 760))}px`;
+  input.style.height = `${Math.max(minimum, Math.min(input.scrollHeight, 760))}px`;
 }
 
 function renderDateHeader() {
