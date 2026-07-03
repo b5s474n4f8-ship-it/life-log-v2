@@ -11,18 +11,16 @@
 - JSON 备份和 Markdown 导出只生成副本，不会删除 app 内数据。
 - AI 整理按需调用；原始记录和 AI 结果分开保存，并保留最近 5 个旧版本。
 
-## 私密历史导入
+## 已有历史记录
 
-私密历史记录不放在公开网站目录中。部署网站后，在 app 的“备份”页面导入：
+两个 Markdown 文件中的历史已经制成 `history-v1.enc.json` 加密包，可安全放在公开网站目录中。第一次打开新版 App 时输入单独保存的解锁口令，11 天历史记录和 4 个闲暇条目会自动写入当前设备。之后打开即可直接查看，无需重复解锁。
 
-`D:\CodexProjects\life-log-private-history-20260630.json`
-
-它包含 2026-06-18 至 2026-06-29 的 11 天历史记录和 4 个闲暇条目，并保留原始 Markdown 来源。导入只需一次，此后记录继续保存在当前设备中。
+解锁口令不在本仓库中。私人原始 Markdown 和明文 JSON 也不在公开网站目录中。
 
 ## GitHub Pages
 
-1. 只上传本目录根部的网页文件，不要上传 `worker` 文件夹。
-2. 不要上传上述私密 JSON 或 `life-log-private-source-20260630`。
+1. 上传公开包里的全部文件到仓库根目录。
+2. 不要上传 `life-log-private-history-20260630.json`、解锁口令文件或原始 Markdown。
 3. 在 GitHub 仓库的 `Settings > Pages` 中选择 `Deploy from a branch`，分支选 `main`，目录选 `/ (root)`。
 4. 等待部署完成后，用 Pages 提供的网址打开。
 

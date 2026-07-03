@@ -142,6 +142,23 @@
       <button class="nav-button" type="button" data-view-target="review-view"><span>看</span>复盘</button>
       <button class="nav-button" type="button" data-view-target="backup-view"><span>存</span>备份</button>
     </nav>
+    <dialog id="history-unlock" class="history-unlock" aria-labelledby="history-unlock-title">
+      <form id="history-unlock-form" class="history-unlock-form">
+        <div class="history-unlock-heading">
+          <img src="./icon-192.png" alt="" width="46" height="46" />
+          <div><h2 id="history-unlock-title">带回过去的记录</h2><p>两个 Markdown 文件已经整理成 11 天记录和 4 个闲暇条目。</p></div>
+        </div>
+        <p class="history-unlock-note">历史内容随 App 加密保存。第一次输入口令后，它们会写入这台设备，以后打开就能直接看到。</p>
+        <label for="history-passphrase">解锁口令
+          <input id="history-passphrase" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入一次即可" required />
+        </label>
+        <p id="history-unlock-status" class="history-unlock-status" role="status" aria-live="polite"></p>
+        <div class="history-unlock-actions">
+          <button id="history-unlock-later" class="secondary-button" type="button">稍后</button>
+          <button id="history-unlock-submit" class="primary-button" type="submit">解锁并查看记录</button>
+        </div>
+      </form>
+    </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <script src="./app.js" defer></script>
   </body>

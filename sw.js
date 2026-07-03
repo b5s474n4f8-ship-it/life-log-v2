@@ -1,5 +1,5 @@
-const CACHE = "life-log-v5-20260630-2";
-const ASSETS = ["./", "./index.html", "./styles.css", "./app-v5.css", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
+const CACHE = "life-log-v5-20260701-1";
+const ASSETS = ["./", "./index.html", "./styles.css", "./app-v5.css", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./history-v1.enc.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

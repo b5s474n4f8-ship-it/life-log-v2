@@ -4,6 +4,9 @@ const DB_KEY = "app";
 const FALLBACK_KEY = "life-log-v5-fallback";
 const LEGACY_KEY = "life-log-v4";
 const PROMPT_VERSION = "life-log-organizer-v1";
+const HISTORY_SEED_URL = "./history-v1.enc.json";
+const HISTORY_SEED_ID = "encrypted-history-v1";
+const HISTORY_AAD = new TextEncoder().encode("life-log-history-v1");
 
 const leisureOptions = {
   kind: { series: "剧", reality: "综艺", game: "游戏", book: "书", article: "文章", documentary: "纪录片", video: "视频", movie: "电影", other: "其他" },
@@ -933,10 +936,76 @@ function bindEvents() {
   $("#export-md").addEventListener("click", exportAllMarkdown);
   $("#import-file").addEventListener("change", (event) => importBackup(event.target.files[0]));
   $("#ai-settings-form").addEventListener("submit", saveAiSettings);
+  $("#history-unlock-form").addEventListener("submit", unlockHistory);
+  $("#history-unlock-later").addEventListener("click", () => $("#history-unlock").close());
   document.addEventListener("visibilitychange", () => { trackDuration(); if (document.visibilityState === "visible") checkDateRoll(); });
   window.addEventListener("focus", checkDateRoll);
 }
 
+function bytesFromBase64(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function decryptHistorySeed(passphrase) {
+  if (!window.crypto?.subtle) throw new Error("当前浏览器不支持安全解锁，请使用最新版 Safari。" );
+  const response = await fetch(HISTORY_SEED_URL, { cache: "no-store" });
+  if (!response.ok) throw new Error("历史记录包暂时没有加载成功，请刷新后重试。" );
+  const envelope = await response.json();
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: bytesFromBase64(envelope.salt), iterations: envelope.iterations }, material, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytesFromBase64(envelope.iv), additionalData: HISTORY_AAD }, key, bytesFromBase64(envelope.ciphertext));
+  return JSON.parse(new TextDecoder().decode(clear));
+}
+
+function mergeHistorySeed(incoming) {
+  if (!incoming?.daily_logs_by_date || !Array.isArray(incoming.leisure_items)) throw new Error("历史记录包格式不正确。" );
+  for (const [date, log] of Object.entries(incoming.daily_logs_by_date)) {
+    const current = state.daily_logs_by_date[date];
+    if (!current || !hasLogContent(current)) state.daily_logs_by_date[date] = log;
+  }
+  const leisureById = new Map(incoming.leisure_items.map((item) => [item.id, normalizeLeisure(item)]));
+  for (const item of state.leisure_items) leisureById.set(item.id, item);
+  state.leisure_items = [...leisureById.values()];
+  if (!state.migrations.includes(HISTORY_SEED_ID)) state.migrations.push(HISTORY_SEED_ID);
+  if (!state.seed_ids.includes(HISTORY_SEED_ID)) state.seed_ids.push(HISTORY_SEED_ID);
+}
+
+async function unlockHistory(event) {
+  event.preventDefault();
+  const passphrase = $("#history-passphrase").value.trim();
+  const status = $("#history-unlock-status");
+  const submit = $("#history-unlock-submit");
+  if (!passphrase) { status.textContent = "请输入解锁口令。"; return; }
+  submit.disabled = true;
+  submit.textContent = "正在带回记录…";
+  status.textContent = "只在这台设备上解锁，请稍候。";
+  try {
+    const incoming = await decryptHistorySeed(passphrase);
+    mergeHistorySeed(incoming);
+    await persistState();
+    $("#history-passphrase").value = "";
+    $("#history-unlock").close();
+    renderAll();
+    switchView("records-view");
+    showToast("过去的记录已经回到 Life Log。" );
+  } catch (error) {
+    status.textContent = error?.name === "OperationError" ? "口令不正确，请检查大小写和连接符。" : (error.message || "解锁失败，请稍后重试。" );
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "解锁并查看记录";
+  }
+}
+
+function offerHistoryUnlock() {
+  if (state.migrations.includes(HISTORY_SEED_ID)) return;
+  const dialog = $("#history-unlock");
+  if (!dialog?.showModal) return;
+  requestAnimationFrame(() => {
+    dialog.showModal();
+    $("#history-passphrase").focus({ preventScroll: true });
+  });
+}
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((registration) => registration.update()).catch(() => {});
@@ -949,6 +1018,7 @@ async function init() {
   populateLeisureSelects();
   bindEvents();
   renderAll();
+  offerHistoryUnlock();
   registerServiceWorker();
   setInterval(trackDuration, 30000);
   setInterval(checkDateRoll, 60000);
