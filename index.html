@@ -1,165 +1,232 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#edf7fb" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="生命力日志" />
-    <title>生命力日志</title>
-    <link rel="icon" href="./icon-192.png" type="image/png" />
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=20260703" />
-    <link rel="stylesheet" href="./app-v5.css?v=20260703" />
-  </head>
-  <body>
-    <header class="app-header" id="top">
-      <button class="brand" type="button" data-view-target="today-view" aria-label="回到今日">
-        <img src="./icon-192.png" alt="" width="42" height="42" />
-        <span><strong>生命力日志</strong><small>Life Log</small></span>
-      </button>
-      <span class="local-badge"><span aria-hidden="true"></span>本地保存</span>
-    </header>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f2f6f4" />
+  <meta name="application-name" content="生命力日志" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="生命力日志" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>生命力日志</title>
+  <link rel="manifest" href="./manifest.webmanifest?v=20260719-formal" />
+  <link rel="icon" href="./mark.svg?v=20260719-formal" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260719-formal" />
+  <link rel="stylesheet" href="./styles.css?v=20260719-formal" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到正文</a>
 
-    <main class="page-shell">
-      <section class="app-view active" id="today-view" aria-label="今日">
-        <section class="day-heading" aria-labelledby="day-title">
-          <p id="weekday">今天</p>
-          <h1 id="day-title">今天</h1>
-          <p id="daily-line">今天不需要完整，留下一点真实就好。</p>
-          <div id="history-mode" class="history-mode" hidden>
-            正在编辑历史记录。内容会保存到这一天，不会移动到今天。
-            <button type="button" id="return-today">回到今天</button>
+  <header class="app-header">
+    <div class="header-inner">
+      <button class="brand" id="brand-today" type="button" aria-label="回到今天">
+        <span class="brand-mark" aria-hidden="true"><i></i></span>
+        <span class="brand-copy"><strong>生命力日志</strong><small>LIFE LOG</small></span>
+      </button>
+
+      <nav class="view-tabs" aria-label="主要页面">
+        <button class="view-tab active" type="button" data-view-target="today" aria-selected="true">今日</button>
+        <button class="view-tab" type="button" data-view-target="month" aria-selected="false">月历</button>
+      </nav>
+
+      <button class="header-command" id="open-backup" type="button" title="备份与导出">
+        <span aria-hidden="true">↓</span><span>备份</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="app-main" id="main-content">
+    <section class="app-view active" id="today-view" data-view="today" aria-labelledby="today-title">
+      <div class="today-shell">
+        <header class="day-heading">
+          <div>
+            <p class="eyebrow" id="today-weekday">今天</p>
+            <h1 id="today-title">7月18日</h1>
+            <p class="day-line">留下发生过的一点，就够了。</p>
           </div>
+          <button class="text-command" id="return-today" type="button" hidden>回到今天</button>
+        </header>
+
+        <div class="history-notice" id="history-notice" hidden>
+          <span>正在补记历史日期</span>
+          <button type="button" id="history-return">返回今天</button>
+        </div>
+
+        <div class="focus-line">
+          <span class="focus-label">本月留意</span>
+          <span class="focus-items" id="today-focus-items"></span>
+          <button class="inline-command" id="manage-trackers-today" type="button">调整</button>
+        </div>
+
+        <section class="note-stream" aria-label="当天记录">
+          <div class="stream-rule"><span id="note-count">0 条记录</span></div>
+          <div class="note-list" id="note-list"></div>
         </section>
 
-        <div class="workspace">
-          <div class="primary-column">
-            <section class="journal-section" aria-labelledby="journal-title">
-              <div class="section-heading">
-                <div><p class="eyebrow">TODAY</p><h2 id="journal-title">今日记录</h2></div>
-                <span id="word-count" class="quiet-meta">0 字</span>
-              </div>
-              <label class="sr-only" for="raw-input">今日原始记录</label>
-              <textarea id="raw-input" rows="9" placeholder="先写下来，不需要分类。事件、身体、睡眠、关系、灵修、娱乐或一点模糊的感受，都可以放在这里。短短几句也可以。"></textarea>
-              <div class="save-row">
-                <p id="autosave-status" class="save-status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span>等待记录</span></p>
-                <p class="privacy-note">原始记录始终保留</p>
-              </div>
-              <div class="main-actions">
-                <button id="save-button" class="secondary-button" type="button">保存今天</button>
-                <button id="organize-button" class="primary-button" type="button"><span class="button-label">帮我整理今天</span><span class="button-progress" hidden>正在整理...</span></button>
-              </div>
-            </section>
-
-            <section id="ai-section" class="ai-section" aria-labelledby="ai-title" hidden>
-              <div class="section-heading">
-                <div><p class="eyebrow lilac">AI ORGANIZED</p><h2 id="ai-title">今天被接住的部分</h2></div>
-                <span id="ai-version" class="quiet-meta">第 1 版</span>
-              </div>
-              <div id="stale-notice" class="stale-notice" role="status" hidden>原始记录已经更新。这份整理仍然保留，但可能不再对应最新内容。</div>
-              <blockquote id="ai-summary"></blockquote>
-              <p id="ai-reflection" class="reflection-line"></p>
-              <div id="theme-row" class="theme-row" aria-label="AI 提取的主题"></div>
-              <div class="extraction-heading">
-                <div><h3>识别出的记录</h3><p>确认前不会写入复盘，你可以删改。</p></div>
-                <span id="confirmation-state" class="pending-label">待确认</span>
-              </div>
-              <div id="extracted-fields" class="extracted-fields"></div>
-              <div class="ai-actions">
-                <button id="adjust-button" class="text-button" type="button">调整</button>
-                <button id="confirm-button" class="confirm-button" type="button">确认并记入复盘</button>
-              </div>
-              <p id="generated-time" class="generated-time"></p>
-            </section>
+        <form class="composer" id="note-form">
+          <label for="note-input">现在想留下什么？</label>
+          <textarea id="note-input" rows="3" placeholder="一件事、一个想法、一点感受。先写下来，不需要分类。" spellcheck="true"></textarea>
+          <div class="composer-footer">
+            <span class="save-state" id="save-state" role="status" aria-live="polite">保存在本机</span>
+            <div class="composer-actions">
+              <button class="quiet-button" id="cancel-edit" type="button" hidden>取消编辑</button>
+              <button class="primary-button" id="save-note" type="submit">保存</button>
+            </div>
           </div>
+        </form>
+      </div>
+    </section>
 
-          <aside class="side-column" aria-label="今日辅助记录">
-            <details class="todo-panel">
-              <summary><span><strong>to-dos</strong><small>今天要托住的事</small></span><span id="todo-count" class="count-label">0/0</span></summary>
-              <div id="todo-list" class="todo-list"></div>
-              <form id="todo-form" class="todo-form">
-                <label class="sr-only" for="todo-input">添加一件事</label>
-                <input id="todo-input" type="text" placeholder="写一件小事" autocomplete="off" />
-                <button type="submit" aria-label="添加">＋</button>
-              </form>
-            </details>
-            <section class="details-section" aria-labelledby="details-title">
-              <div class="details-intro"><div><p class="eyebrow mint">OPTIONAL</p><h2 id="details-title">需要时再展开</h2></div><p>这不是今天必须完成的清单。</p></div>
-              <div class="detail-stack" id="detail-stack"></div>
-            </section>
-            <p id="duration-note" class="duration-note">今日在这里停留约 0 分钟</p>
-          </aside>
+    <section class="app-view" id="month-view" data-view="month" aria-labelledby="month-title" hidden>
+      <div class="month-shell">
+        <header class="month-heading">
+          <div class="month-title-row">
+            <button class="icon-button" id="previous-month" type="button" aria-label="上个月" title="上个月">‹</button>
+            <div>
+              <p class="eyebrow">MONTHLY NOTES</p>
+              <h1 id="month-title">2026年7月</h1>
+            </div>
+            <button class="icon-button" id="next-month" type="button" aria-label="下个月" title="下个月">›</button>
+          </div>
+          <button class="text-command" id="current-month" type="button">回到本月</button>
+        </header>
+
+        <div class="month-focus">
+          <div><span class="focus-label">本月留意</span><span id="month-focus-items"></span></div>
+          <button class="inline-command" id="manage-trackers-month" type="button">调整</button>
         </div>
+
+        <section class="calendar-section" aria-label="月份日历">
+          <div class="weekday-row" aria-hidden="true">
+            <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+          </div>
+          <div class="calendar-grid" id="calendar-grid"></div>
+        </section>
+
+        <section class="selected-day" aria-labelledby="selected-day-title">
+          <header>
+            <div>
+              <p class="eyebrow">选中的一天</p>
+              <h2 id="selected-day-title">7月18日</h2>
+            </div>
+            <button class="text-command" id="open-selected-day" type="button">打开这一天</button>
+          </header>
+          <div id="selected-day-content"></div>
+        </section>
+
+        <section class="month-summary" aria-labelledby="summary-title">
+          <header>
+            <div>
+              <p class="eyebrow">本月留下的痕迹</p>
+              <h2 id="summary-title">月度小结</h2>
+            </div>
+            <p>基于已经放进月历的记录。空白只是没有记录，不代表没有发生。</p>
+          </header>
+          <div class="summary-list" id="summary-list"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="sheet-dialog" id="trace-dialog" aria-labelledby="trace-dialog-title">
+    <form class="dialog-shell" id="trace-form" method="dialog">
+      <header class="dialog-header">
+        <div><p class="eyebrow">可选</p><h2 id="trace-dialog-title">放进月历</h2></div>
+        <button class="icon-button close-button" id="close-trace-dialog" type="button" aria-label="关闭" title="关闭">×</button>
+      </header>
+      <blockquote class="note-preview" id="trace-note-preview"></blockquote>
+      <p class="dialog-intro">选择这条记录涉及的项目，可以多选。什么都不选也没关系。</p>
+      <div class="tracker-choices" id="month-tracker-choices"></div>
+      <button class="more-toggle" id="toggle-more-trackers" type="button" aria-expanded="false">更多项目</button>
+      <div class="tracker-choices more-choices" id="more-tracker-choices" hidden></div>
+      <div class="trace-fields" id="trace-fields"></div>
+      <footer class="dialog-actions">
+        <button class="quiet-button" id="remove-note-traces" type="button">移出月历</button>
+        <button class="primary-button" id="save-traces" type="submit">完成</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="sheet-dialog tracker-dialog" id="tracker-dialog" aria-labelledby="tracker-dialog-title">
+    <div class="dialog-shell">
+      <header class="dialog-header">
+        <div><p class="eyebrow">每月可调整</p><h2 id="tracker-dialog-title">本月留意</h2></div>
+        <button class="icon-button close-button" id="close-tracker-dialog" type="button" aria-label="关闭" title="关闭">×</button>
+      </header>
+      <p class="dialog-intro">只把现在真正想看见的项目放在前面，最多 8 项。新月份会沿用这组设置。</p>
+      <div class="active-tracker-list" id="active-tracker-list"></div>
+
+      <section class="library-section" aria-labelledby="library-title">
+        <h3 id="library-title">项目库</h3>
+        <div class="library-groups" id="tracker-library"></div>
       </section>
 
-      <section class="app-view" id="records-view" aria-label="每日记录">
-        <header class="view-heading"><div><p class="eyebrow">HISTORY</p><h1>每日记录</h1><p>记录一直留在 app 里。导出只是多一份副本，不会把这里清空。</p></div><button class="secondary-button compact" id="export-all-from-records" type="button">导出全部</button></header>
-        <section class="record-toolbar"><label>月份<input id="record-month" type="month" /></label><button id="show-all-records" class="text-button" type="button">查看全部</button><span id="record-total" class="quiet-meta">0 天</span></section>
-        <div id="record-list" class="record-list"></div>
-        <section id="record-detail" class="record-detail" hidden></section>
-      </section>
+      <details class="new-tracker">
+        <summary>新建自己的项目</summary>
+        <form id="new-tracker-form">
+          <label>项目名称<input id="new-tracker-name" type="text" maxlength="12" placeholder="例如：晒太阳" required /></label>
+          <label>记录方式
+            <select id="new-tracker-mode">
+              <option value="occurrence">只记发生</option>
+              <option value="duration">记录时长</option>
+              <option value="quantity">记录数量</option>
+              <option value="state">记录状态</option>
+            </select>
+          </label>
+          <label id="new-tracker-unit-label" hidden>数量单位<input id="new-tracker-unit" type="text" maxlength="8" placeholder="例如：页、公里" /></label>
+          <button class="secondary-button" type="submit">加入本月</button>
+        </form>
+      </details>
 
-      <section class="app-view" id="leisure-view" aria-label="闲暇">
-        <header class="view-heading"><div><p class="eyebrow lilac">LEISURE</p><h1>闲暇</h1><p>把剧、综艺、游戏、书、文章、纪录片和视频放在这里。无聊时，知道自己还可以继续什么。</p></div><button id="bored-button" class="secondary-button compact" type="button">我有点无聊</button></header>
-        <div id="bored-result" class="bored-result" hidden></div>
-        <div class="leisure-layout">
-          <section class="leisure-editor">
-            <div class="section-heading"><div><p class="eyebrow mint">ADD</p><h2 id="leisure-form-title">放进闲暇清单</h2></div><button id="cancel-leisure-edit" class="text-button" type="button" hidden>取消</button></div>
-            <form id="leisure-form" class="leisure-form">
-              <label>名称<input id="leisure-title" type="text" required placeholder="一部剧、一本书或一篇文章" /></label>
-              <div class="two-fields plain"><label>类型<select id="leisure-kind"></select></label><label>状态<select id="leisure-status"></select></label></div>
-              <label>进度<input id="leisure-progress" type="text" placeholder="例如 S1E3、第 120 页、已读完" /></label>
-              <div class="two-fields plain"><label>适合情境<select id="leisure-context"></select></label><label>感受<select id="leisure-feeling"></select></label></div>
-              <label>一句话备注<textarea id="leisure-note" rows="3" placeholder="为什么想继续，或者它留下了什么。"></textarea></label>
-              <button class="primary-button" id="leisure-submit" type="submit">保存闲暇条目</button>
-            </form>
-          </section>
-          <section class="leisure-shelf"><div class="section-heading"><div><p class="eyebrow">SHELF</p><h2>我的闲暇清单</h2></div><span id="leisure-count" class="quiet-meta">0 个</span></div><div id="leisure-list" class="leisure-list"></div></section>
-        </div>
-      </section>
+      <footer class="dialog-actions single-action">
+        <button class="primary-button" id="finish-tracker-management" type="button">完成</button>
+      </footer>
+    </div>
+  </dialog>
 
-      <section class="app-view" id="review-view" aria-label="复盘">
-        <header class="view-heading"><div><p class="eyebrow mint">REVIEW</p><h1>最近七天</h1><p>不诊断，不评分，只把身体、生活和内在信号重新看一眼。</p></div></header>
-        <div id="review-content" class="review-grid"></div>
-      </section>
+  <dialog class="sheet-dialog backup-dialog" id="backup-dialog" aria-labelledby="backup-dialog-title">
+    <div class="dialog-shell">
+      <header class="dialog-header">
+        <div><p class="eyebrow">保存在你手里</p><h2 id="backup-dialog-title">备份与导出</h2></div>
+        <button class="icon-button close-button" id="close-backup-dialog" type="button" aria-label="关闭" title="关闭">×</button>
+      </header>
 
-      <section class="app-view" id="backup-view" aria-label="备份与设置">
-        <header class="view-heading"><div><p class="eyebrow">KEEP</p><h1>备份与设置</h1><p>记录默认持续保存在这台设备。定期导出，是额外留一把钥匙。</p></div></header>
-        <div class="settings-grid">
-          <section class="settings-section"><h2>备份</h2><p>导出不会删除 app 里的任何内容。</p><div class="stack-actions"><button id="export-json" class="primary-button" type="button">导出完整备份 JSON</button><button id="export-md" class="secondary-button" type="button">导出全部 Markdown</button></div><label class="file-label">导入 JSON 备份<input id="import-file" type="file" accept="application/json,.json" /></label></section>
-          <section class="settings-section" id="ai-settings"><h2>AI 整理接口</h2><p>API Key 只放在后端。这里保存的是接口地址和你自己设置的访问口令。</p><form id="ai-settings-form" class="settings-form"><label>Serverless API 地址<input id="ai-api-url" type="url" placeholder="https://your-worker.workers.dev/api/organize-log" /></label><label>访问口令<input id="ai-access-code" type="password" autocomplete="off" placeholder="不是 OpenAI API Key" /></label><button class="secondary-button" type="submit">保存 AI 设置</button></form><p id="ai-settings-status" class="microcopy"></p></section>
-          <section class="settings-section storage-note"><h2>关于持续保存</h2><p>数据与导出相互独立：不导出也会继续保留，导出后也不会消失。清除浏览器数据或更换手机仍可能移除本地记录，因此完整 JSON 备份依然重要。</p><p id="storage-status" class="microcopy"></p></section>
+      <div class="storage-status" id="storage-status">
+        <span class="storage-status-mark" aria-hidden="true"></span>
+        <div>
+          <strong id="storage-status-title">正在检查本机存储</strong>
+          <p id="storage-status-copy">记录仍可正常使用。</p>
         </div>
-      </section>
-    </main>
+      </div>
 
-    <nav class="bottom-nav" aria-label="主导航">
-      <button class="nav-button active" type="button" data-view-target="today-view"><span>今</span>今日</button>
-      <button class="nav-button" type="button" data-view-target="records-view"><span>录</span>记录</button>
-      <button class="nav-button" type="button" data-view-target="leisure-view"><span>闲</span>闲暇</button>
-      <button class="nav-button" type="button" data-view-target="review-view"><span>看</span>复盘</button>
-      <button class="nav-button" type="button" data-view-target="backup-view"><span>存</span>备份</button>
-    </nav>
-    <dialog id="history-unlock" class="history-unlock" aria-labelledby="history-unlock-title">
-      <form id="history-unlock-form" class="history-unlock-form">
-        <div class="history-unlock-heading">
-          <img src="./icon-192.png" alt="" width="46" height="46" />
-          <div><h2 id="history-unlock-title">带回过去的记录</h2><p>两个 Markdown 文件已经整理成 11 天记录和 4 个闲暇条目。</p></div>
-        </div>
-        <p class="history-unlock-note">历史内容随 App 加密保存。第一次输入口令后，它们会写入这台设备，以后打开就能直接看到。</p>
-        <label for="history-passphrase">解锁口令
-          <input id="history-passphrase" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入一次即可" required />
-        </label>
-        <p id="history-unlock-status" class="history-unlock-status" role="status" aria-live="polite"></p>
-        <div class="history-unlock-actions">
-          <button id="history-unlock-later" class="secondary-button" type="button">稍后</button>
-          <button id="history-unlock-submit" class="primary-button" type="submit">解锁并查看记录</button>
-        </div>
-      </form>
-    </dialog>
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <script src="./app.js?v=20260703" defer></script>
-  </body>
+      <div class="backup-action-list">
+        <button class="backup-action" id="download-backup" type="button">
+          <span aria-hidden="true">↓</span>
+          <span><strong>备份全部记录</strong><small>JSON，可用于完整恢复</small></span>
+        </button>
+        <button class="backup-action" id="export-month" type="button">
+          <span aria-hidden="true">文</span>
+          <span><strong>导出当前月份</strong><small>Markdown，适合阅读和归档</small></span>
+        </button>
+        <button class="backup-action" id="choose-backup" type="button">
+          <span aria-hidden="true">↑</span>
+          <span><strong>导入备份</strong><small>与本机记录合并，不会清空现有内容</small></span>
+        </button>
+        <input id="backup-file-input" type="file" accept=".json,application/json" hidden />
+      </div>
+
+      <p class="backup-meta" id="last-backup-copy">尚未在这台设备上导出完整备份。</p>
+      <p class="privacy-note">记录只保存在当前设备；发布网页不包含你的私人内容。</p>
+
+      <footer class="dialog-actions single-action">
+        <button class="primary-button" id="finish-backup" type="button">完成</button>
+      </footer>
+    </div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="./app.js?v=20260719-formal" defer></script>
+</body>
 </html>
+
+

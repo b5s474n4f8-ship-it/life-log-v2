@@ -1,1028 +1,1186 @@
-const DB_NAME = "life-log-v5";
+const STORAGE_KEY = "life-log-calendar-v1";
+const DB_NAME = "life-log-calendar-db";
+const DB_VERSION = 1;
 const DB_STORE = "state";
-const DB_KEY = "app";
-const FALLBACK_KEY = "life-log-v5-fallback";
-const LEGACY_KEY = "life-log-v4";
-const PROMPT_VERSION = "life-log-organizer-v1";
-const HISTORY_SEED_URL = "./history-v1.enc.json";
-const HISTORY_SEED_ID = "encrypted-history-v1";
-const HISTORY_AAD = new TextEncoder().encode("life-log-history-v1");
+const DB_KEY = "main";
+const BACKUP_FORMAT = "life-log-calendar-backup";
+const BACKUP_VERSION = 1;
+const DEFAULT_FOCUS = ["faith", "sleep", "body", "movement", "reading", "people"];
 
-const leisureOptions = {
-  kind: { series: "剧", reality: "综艺", game: "游戏", book: "书", article: "文章", documentary: "纪录片", video: "视频", movie: "电影", other: "其他" },
-  status: { want: "稍后", watching: "进行中", paused: "暂停", finished: "完成", dropped: "放下" },
-  context: { bored: "无聊时", "low-energy": "低能量", relax: "想放松", inspire: "想被启发", social: "想社交" },
-  feeling: { plain: "一般", nourishing: "滋养", company: "陪伴", exciting: "兴奋", draining: "消耗" },
-};
-
-const detailLabels = { sleep: "睡眠", movement: "运动", chores: "庶务管理", leisure: "闲暇", spiritual: "灵修" };
-const legacyTypeLabels = {
-  sleep: "睡眠", dream: "梦境", body: "身体", chores: "庶务", movement: "运动", spiritual: "灵修",
-  relationship: "关系", inner: "内在与能量", creation: "创造", inspiration: "灵感", leisure: "闲暇", free: "自由记录",
-};
-const metricLabels = { sleepHours: ["睡眠时长", "小时"], napMinutes: ["午睡/补觉", "分钟"], sleepRecovery: ["恢复感", "/5"], movementMinutes: ["运动时长", "分钟"], walkKm: ["距离", "公里"] };
-
-const dailyLines = [
-  "今天不需要完整，留下一点真实就好。",
-  "先记录，再整理；先看见，再判断。",
-  "短短几句也可以，生活不需要被写满。",
-  "给生活一点秩序，也给自己一点余地。",
-  "可以轻一点，但不要从自己的生活里缺席。",
-  "今天先接住真实的一点。",
-  "不急着总结，先和今天在一起。",
+const BUILT_IN_TRACKERS = [
+  { id: "faith", name: "灵修", short: "灵", group: "人与精神", preset: "generic", mode: "occurrence", tone: "sun", builtIn: true },
+  { id: "dream", name: "梦境", short: "梦", group: "人与精神", preset: "generic", mode: "occurrence", tone: "blue", builtIn: true },
+  { id: "inner", name: "内在与能量", short: "内", group: "人与精神", preset: "generic", mode: "state", tone: "violet", builtIn: true },
+  { id: "inspiration", name: "灵感", short: "感", group: "输入与创造", preset: "generic", mode: "occurrence", tone: "sun", builtIn: true },
+  { id: "people", name: "社交", short: "社", group: "人与精神", preset: "people", mode: "occurrence", tone: "coral", builtIn: true },
+  { id: "relationship", name: "关系", short: "系", group: "人与精神", preset: "generic", mode: "state", tone: "violet", builtIn: true },
+  { id: "movement", name: "运动", short: "动", group: "身体与节律", preset: "movement", mode: "duration", tone: "mint", builtIn: true },
+  { id: "sleep", name: "睡眠", short: "睡", group: "身体与节律", preset: "sleep", mode: "duration", tone: "blue", builtIn: true },
+  { id: "body", name: "身体", short: "身", group: "身体与节律", preset: "body", mode: "state", tone: "coral", builtIn: true },
+  { id: "cycle", name: "经期", short: "经", group: "身体与节律", preset: "generic", mode: "state", tone: "violet", builtIn: true },
+  { id: "care", name: "生活照料", short: "照", group: "身体与节律", preset: "generic", mode: "occurrence", tone: "mint", builtIn: true },
+  { id: "reading", name: "阅读", short: "读", group: "输入与创造", preset: "reading", mode: "quantity", unit: "页", tone: "violet", builtIn: true },
+  { id: "learning", name: "学习", short: "学", group: "输入与创造", preset: "generic", mode: "duration", tone: "blue", builtIn: true },
+  { id: "creation", name: "创造", short: "创", group: "输入与创造", preset: "generic", mode: "occurrence", tone: "sun", builtIn: true },
+  { id: "leisure", name: "闲暇", short: "闲", group: "生活事件", preset: "generic", mode: "occurrence", tone: "coral", builtIn: true },
+  { id: "travel", name: "出行旅行", short: "行", group: "生活事件", preset: "generic", mode: "occurrence", tone: "blue", builtIn: true },
+  { id: "housework", name: "家务", short: "务", group: "生活事件", preset: "generic", mode: "duration", tone: "mint", builtIn: true },
+  { id: "work", name: "工作", short: "工", group: "生活事件", preset: "generic", mode: "duration", tone: "violet", builtIn: true }
 ];
 
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => [...document.querySelectorAll(selector)];
+const GROUP_ORDER = ["人与精神", "身体与节律", "输入与创造", "生活事件", "自定义"];
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
-let db = null;
 let state = createEmptyState();
-let activeView = "today-view";
-let currentDate = todayKey();
-let selectedMonth = currentDate.slice(0, 7);
-let editingLeisureId = null;
-let saveTimer = null;
-let detailTimer = null;
+let databasePromise = null;
+let storageWriteQueue = Promise.resolve();
+let storagePersistence = { supported: false, persisted: false };
+let currentView = "today";
+let activeDate = todayKey();
+let lastToday = activeDate;
+let calendarMonth = monthKey(activeDate);
+let selectedCalendarDate = activeDate;
+let editingNoteId = null;
+let activeTraceNoteId = null;
+let selectedTraceTrackers = new Set();
+let traceDrafts = {};
+let managerMonth = calendarMonth;
+let managerIds = [];
 let toastTimer = null;
-let lastInteractionAt = Date.now();
-let lastDurationTick = Date.now();
-let lastToday = currentDate;
+let draftTimer = null;
 
-function createEmptyState() {
-  return {
-    version: 5,
-    daily_logs_by_date: {},
-    leisure_items: [],
-    durations_by_date: {},
-    settings: { ai_api_url: "", ai_access_code: "" },
-    migrations: [],
-    seed_ids: [],
-  };
-}
-
-function emptyLog(date) {
-  const now = new Date().toISOString();
-  return {
-    date,
-    raw_input: "",
-    todos: [],
-    confirmed_details: {},
-    legacy_sections: [],
-    ai_organized: null,
-    ai_versions: [],
-    metadata: { source: "app", created_at: now, updated_at: now },
-  };
-}
-
-function openDb() {
-  return new Promise((resolve, reject) => {
-    if (!window.indexedDB) return reject(new Error("IndexedDB unavailable"));
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const next = request.result;
-      if (!next.objectStoreNames.contains(DB_STORE)) next.createObjectStore(DB_STORE);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function idbGet(key) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, "readonly");
-    const request = tx.objectStore(DB_STORE).get(key);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function idbPut(key, value) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, "readwrite");
-    tx.objectStore(DB_STORE).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function loadState() {
-  try {
-    db = await openDb();
-    const saved = await idbGet(DB_KEY);
-    if (saved?.version === 5) return normalizeState(saved);
-  } catch {
-    db = null;
-    try {
-      const fallback = JSON.parse(localStorage.getItem(FALLBACK_KEY) || "null");
-      if (fallback?.version === 5) return normalizeState(fallback);
-    } catch {}
-  }
-  return createEmptyState();
-}
-
-function normalizeState(value) {
-  return {
-    ...createEmptyState(),
-    ...value,
-    daily_logs_by_date: value.daily_logs_by_date || {},
-    leisure_items: Array.isArray(value.leisure_items) ? value.leisure_items : [],
-    durations_by_date: value.durations_by_date || {},
-    settings: { ...createEmptyState().settings, ...(value.settings || {}) },
-    migrations: Array.isArray(value.migrations) ? value.migrations : [],
-    seed_ids: Array.isArray(value.seed_ids) ? value.seed_ids : [],
-  };
-}
-
-async function persistState() {
-  try {
-    if (db) await idbPut(DB_KEY, state);
-    else localStorage.setItem(FALLBACK_KEY, JSON.stringify(state));
-  } catch {
-    localStorage.setItem(FALLBACK_KEY, JSON.stringify(state));
-  }
-  renderStorageStatus();
-}
-
-function ensureLog(date) {
-  if (!state.daily_logs_by_date[date]) state.daily_logs_by_date[date] = emptyLog(date);
-  return state.daily_logs_by_date[date];
-}
-
-function migrateV4() {
-  if (state.migrations.includes("localstorage-v4")) return false;
-  let old = null;
-  try { old = JSON.parse(localStorage.getItem(LEGACY_KEY) || "null"); } catch {}
-  if (old?.version === 4) {
-    for (const entry of old.entries || []) {
-      if (!entry?.date) continue;
-      const log = ensureLog(entry.date);
-      const label = legacyTypeLabels[entry.type] || "记录";
-      const details = [];
-      if (entry.tags?.length) details.push(`选项：${entry.tags.join("，")}`);
-      const metrics = formatMetrics(entry.metrics || {});
-      if (metrics) details.push(`数据：${metrics}`);
-      for (const [key, value] of Object.entries(entry.extras || {})) {
-        const extraLabel = key === "bedtimeActivity" ? "睡前活动" : key === "sleepFactors" ? "影响睡眠的因素" : key;
-        if (value) details.push(`${extraLabel}：${value}`);
-      }
-      if (entry.text) details.push(entry.text);
-      const content = details.join("\n");
-      const time = formatTime(entry.createdAt);
-      log.legacy_sections.push({ title: label, time, content });
-      log.raw_input += `${log.raw_input ? "\n\n" : ""}【${label}${time ? ` · ${time}` : ""}】\n${content}`;
-      mergeLegacyDetail(log, entry);
-      log.metadata = { ...log.metadata, source: "localstorage-v4", updated_at: entry.updatedAt || entry.createdAt || log.metadata.updated_at };
-    }
-    for (const [date, todos] of Object.entries(old.todosByDate || {})) {
-      ensureLog(date).todos = Array.isArray(todos) ? todos : [];
-    }
-    for (const item of old.leisureItems || []) {
-      if (!state.leisure_items.some((saved) => saved.id === item.id || saved.title === item.title)) state.leisure_items.push(normalizeLeisure(item));
-    }
-    state.durations_by_date = { ...old.durationsByDate, ...state.durations_by_date };
-  }
-  state.migrations.push("localstorage-v4");
-  return Boolean(old);
-}
-
-function mergeLegacyDetail(log, entry) {
-  const type = entry.type;
-  if (!["sleep", "movement", "chores", "spiritual"].includes(type)) return;
-  const existing = log.confirmed_details[type] || { tags: [], metrics: {}, extras: {}, note: "" };
-  existing.tags = [...new Set([...(existing.tags || []), ...(entry.tags || [])])];
-  existing.metrics = { ...(existing.metrics || {}), ...(entry.metrics || {}) };
-  existing.extras = { ...(existing.extras || {}), ...(entry.extras || {}) };
-  if (entry.text) existing.note = [existing.note, entry.text].filter(Boolean).join("\n\n");
-  log.confirmed_details[type] = existing;
-}
-
-function hasLogContent(log) {
-  return Boolean(log?.raw_input?.trim() || log?.todos?.length || Object.keys(log?.confirmed_details || {}).length || log?.legacy_sections?.length || log?.ai_organized);
-}
-
-function normalizeLeisure(item) {
-  return {
-    id: item.id || uid("leisure"), title: item.title || "", kind: item.kind || "other", original_kind: item.original_kind || "",
-    status: item.status || "want", progress: item.progress || "", context: item.context || "bored", feeling: item.feeling || "plain",
-    note: item.note || "", created_at: item.created_at || item.createdAt || new Date().toISOString(), updated_at: item.updated_at || item.updatedAt || new Date().toISOString(), metadata: item.metadata || {},
-  };
+function makeId(prefix = "id") {
+  const suffix = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${suffix}`;
 }
 
 function todayKey(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function dateFromKey(key) {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d, 12);
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
 
-function formatDate(key, options = { month: "long", day: "numeric" }) {
-  return new Intl.DateTimeFormat("zh-CN", options).format(dateFromKey(key));
+function keyFromDate(date) {
+  return todayKey(date);
+}
+
+function addDays(key, amount) {
+  const date = dateFromKey(key);
+  date.setDate(date.getDate() + amount);
+  return keyFromDate(date);
+}
+
+function monthKey(dateKey) {
+  return dateKey.slice(0, 7);
+}
+
+function shiftMonth(key, amount) {
+  const [year, month] = key.split("-").map(Number);
+  const date = new Date(year, month - 1 + amount, 1, 12);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function firstDateOfMonth(key) {
+  return `${key}-01`;
+}
+
+function formatMonth(key) {
+  const [year, month] = key.split("-").map(Number);
+  return `${year}年${month}月`;
+}
+
+function formatDay(key, withWeekday = false) {
+  const date = dateFromKey(key);
+  const base = `${date.getMonth() + 1}月${date.getDate()}日`;
+  if (!withWeekday) return base;
+  const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(date);
+  return `${base} ${weekday}`;
 }
 
 function formatTime(value) {
-  if (!value) return "";
-  try { return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)); } catch { return ""; }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "现在";
+  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
 }
 
-function dateHash(value) {
-  return [...value].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+function noteTimeLabel(note) {
+  return note?.timeKnown === false ? "补录" : formatTime(note?.createdAt);
 }
 
-function uid(prefix) {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function normalizeText(value) {
-  return String(value || "").trim().toLocaleLowerCase("zh-CN");
+function isoForDate(key, hour, minute) {
+  const date = dateFromKey(key);
+  date.setHours(hour, minute, 0, 0);
+  return date.toISOString();
 }
 
 function escapeHtml(value) {
-  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function fingerprint(text) {
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i += 1) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-  return (hash >>> 0).toString(16);
+function escapeAttr(value) {
+  return escapeHtml(value);
 }
 
-function download(filename, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+function createEmptyState() {
+  const now = new Date().toISOString();
+  return {
+    version: 1,
+    notes: [],
+    traces: [],
+    trackers: BUILT_IN_TRACKERS.map((tracker) => ({ ...tracker })),
+    monthPreferences: { [monthKey(todayKey())]: [...DEFAULT_FOCUS] },
+    drafts: {},
+    meta: {
+      createdAt: now,
+      updatedAt: now,
+      lastBackupAt: null,
+      lastImportAt: null
+    }
+  };
 }
 
-function showToast(message) {
-  clearTimeout(toastTimer);
-  const toast = $("#toast");
-  toast.textContent = message; toast.hidden = false;
-  toastTimer = setTimeout(() => { toast.hidden = true; }, 2400);
+function normalizeState(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const savedTrackers = Array.isArray(source.trackers) ? source.trackers : [];
+  const savedById = new Map(savedTrackers.map((tracker) => [tracker.id, tracker]));
+  const trackers = BUILT_IN_TRACKERS.map((tracker) => ({ ...(savedById.get(tracker.id) || {}), ...tracker }));
+  savedTrackers.filter((tracker) => !BUILT_IN_TRACKERS.some((builtIn) => builtIn.id === tracker.id)).forEach((tracker) => trackers.push(tracker));
+  const monthPreferences = source.monthPreferences && typeof source.monthPreferences === "object" ? source.monthPreferences : {};
+  Object.keys(monthPreferences).forEach((month) => {
+    const ids = Array.isArray(monthPreferences[month]) ? monthPreferences[month] : [];
+    monthPreferences[month] = ids.includes("faith") ? ["faith", ...ids.filter((id) => id !== "faith")] : ids;
+  });
+  return {
+    version: 1,
+    notes: Array.isArray(source.notes) ? source.notes : [],
+    traces: Array.isArray(source.traces) ? source.traces : [],
+    trackers,
+    monthPreferences,
+    drafts: source.drafts && typeof source.drafts === "object" ? source.drafts : {},
+    meta: {
+      createdAt: source.meta?.createdAt || source.seededAt || new Date().toISOString(),
+      updatedAt: source.meta?.updatedAt || new Date().toISOString(),
+      lastBackupAt: source.meta?.lastBackupAt || null,
+      lastImportAt: source.meta?.lastImportAt || null
+    }
+  };
 }
 
-function updateWordCount() {
-  const count = $("#raw-input").value.replace(/\s/g, "").length;
-  $("#word-count").textContent = `${count} 字`;
+function loadLocalState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? normalizeState(JSON.parse(saved)) : null;
+  } catch {
+    return null;
+  }
 }
 
-function autoResize() {
-  const input = $("#raw-input");
-  const minimum = window.matchMedia("(max-width: 560px)").matches ? 190 : 230;
-  input.style.height = "auto";
-  input.style.height = `${Math.max(minimum, Math.min(input.scrollHeight, 760))}px`;
+function openStateDatabase() {
+  if (!("indexedDB" in window)) return Promise.reject(new Error("IndexedDB unavailable"));
+  if (databasePromise) return databasePromise;
+  databasePromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(DB_STORE)) request.result.createObjectStore(DB_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Could not open IndexedDB"));
+  });
+  return databasePromise;
 }
 
-function renderDateHeader() {
-  const isToday = currentDate === todayKey();
-  $("#weekday").textContent = `${isToday ? "今天" : "历史"} · ${formatDate(currentDate, { weekday: "long" })}`;
-  $("#day-title").textContent = formatDate(currentDate);
-  $("#daily-line").textContent = dailyLines[dateHash(currentDate) % dailyLines.length];
-  $("#history-mode").hidden = isToday;
+async function readStateFromDatabase() {
+  const database = await openStateDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(DB_STORE, "readonly");
+    const request = transaction.objectStore(DB_STORE).get(DB_KEY);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error || new Error("Could not read IndexedDB"));
+  });
+}
+
+async function writeStateToDatabase(value) {
+  const database = await openStateDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(DB_STORE, "readwrite");
+    transaction.objectStore(DB_STORE).put(value, DB_KEY);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error || new Error("Could not write IndexedDB"));
+    transaction.onabort = () => reject(transaction.error || new Error("IndexedDB write aborted"));
+  });
+}
+
+async function initializeState() {
+  let databaseState = null;
+  try {
+    databaseState = await readStateFromDatabase();
+  } catch {}
+  state = normalizeState(databaseState || loadLocalState() || createEmptyState());
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+  try {
+    await writeStateToDatabase(state);
+  } catch {}
+}
+
+function persistState(message = "已保存到本机") {
+  state.meta = {
+    ...(state.meta || {}),
+    updatedAt: new Date().toISOString()
+  };
+  const snapshot = JSON.parse(JSON.stringify(state));
+  let localSaved = true;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    localSaved = false;
+  }
+  storageWriteQueue = storageWriteQueue
+    .then(() => writeStateToDatabase(snapshot))
+    .catch(() => {
+      const status = document.querySelector("#save-state");
+      if (status && !localSaved) status.textContent = "当前浏览器无法保存";
+    });
+  const status = document.querySelector("#save-state");
+  if (status) status.textContent = localSaved ? message : "正在尝试本机保存";
+}
+
+function trackerById(id) {
+  return state.trackers.find((tracker) => tracker.id === id);
+}
+
+function trackerTone(trackerOrId) {
+  const tracker = typeof trackerOrId === "string" ? trackerById(trackerOrId) : trackerOrId;
+  return ["sun", "coral", "mint", "blue", "violet"].includes(tracker?.tone) ? tracker.tone : "blue";
+}
+
+function toneClass(trackerOrId) {
+  return `tone-${trackerTone(trackerOrId)}`;
+}
+
+function getMonthFocusIds(key) {
+  const direct = state.monthPreferences[key];
+  if (Array.isArray(direct)) return direct.filter((id) => trackerById(id));
+  const previous = Object.keys(state.monthPreferences)
+    .filter((month) => month < key && Array.isArray(state.monthPreferences[month]))
+    .sort()
+    .reverse()[0];
+  const inherited = previous ? state.monthPreferences[previous] : DEFAULT_FOCUS;
+  return inherited.filter((id) => trackerById(id)).slice(0, 8);
+}
+
+function setMonthFocusIds(key, ids) {
+  state.monthPreferences[key] = [...new Set(ids)].filter((id) => trackerById(id)).slice(0, 8);
+  persistState();
+}
+
+function notesForDate(date) {
+  return state.notes.filter((note) => note.date === date).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function tracesForDate(date) {
+  return state.traces.filter((trace) => trace.date === date).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function tracesForNote(noteId) {
+  return state.traces.filter((trace) => trace.noteId === noteId);
+}
+
+function noteById(noteId) {
+  return state.notes.find((note) => note.id === noteId);
+}
+
+function renderFocusItems(target, month) {
+  const trackers = getMonthFocusIds(month).map(trackerById).filter(Boolean);
+  target.innerHTML = trackers.length
+    ? trackers.map((tracker) => `<span class="${toneClass(tracker)}">${escapeHtml(tracker.name)}</span>`).join("")
+    : "<span>暂时没有设定</span>";
 }
 
 function renderToday() {
-  const log = ensureLog(currentDate);
-  renderDateHeader();
-  $("#raw-input").value = log.raw_input || "";
-  updateWordCount(); autoResize();
-  renderTodos(log);
-  renderDetailStack(log);
-  renderAi(log);
-  renderDuration();
+  const today = todayKey();
+  const isToday = activeDate === today;
+  $("#today-weekday").textContent = `${isToday ? "今天" : "历史"} · ${new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(dateFromKey(activeDate))}`;
+  $("#today-title").textContent = formatDay(activeDate);
+  $("#return-today").hidden = isToday;
+  $("#history-notice").hidden = isToday;
+  renderFocusItems($("#today-focus-items"), monthKey(activeDate));
+
+  const notes = notesForDate(activeDate);
+  $("#note-count").textContent = `${notes.length} 条记录`;
+  $("#note-list").innerHTML = notes.length ? notes.map(renderNote).join("") : `<p class="empty-copy">这一天还是空白。<br />可以只留下一句话。</p>`;
+
+  if (!editingNoteId) $("#note-input").value = state.drafts[activeDate] || "";
+  autoResize($("#note-input"));
 }
 
-function scheduleRawSave() {
-  const log = ensureLog(currentDate);
-  log.raw_input = $("#raw-input").value;
-  log.metadata = { ...(log.metadata || {}), updated_at: new Date().toISOString() };
-  updateWordCount(); autoResize(); markAiStale(log);
-  const status = $("#autosave-status");
-  status.classList.add("saving"); status.querySelector("span:last-child").textContent = "正在自动保存";
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    await persistState();
-    status.classList.remove("saving"); status.querySelector("span:last-child").textContent = `已自动保存 · ${formatTime(new Date().toISOString())}`;
-  }, 550);
+function renderNote(note) {
+  const traces = tracesForNote(note.id);
+  const traceHtml = traces.length
+    ? `<div class="note-traces">${traces.map((trace) => `<span class="${toneClass(trace.trackerId)}">${escapeHtml(traceSummary(trace))}</span>`).join("")}</div>`
+    : "";
+  return `
+    <article class="note-item" data-note-id="${escapeAttr(note.id)}">
+      <time class="note-time" datetime="${escapeAttr(note.createdAt)}">${escapeHtml(noteTimeLabel(note))}</time>
+      <div class="note-body">
+        <p class="note-text">${escapeHtml(note.text)}</p>
+        ${traceHtml}
+        <div class="note-actions">
+          <button type="button" data-note-action="trace">${traces.length ? "调整月历痕迹" : "放进月历"}</button>
+          <button type="button" data-note-action="edit">编辑</button>
+          <button type="button" data-note-action="delete">删除</button>
+        </div>
+      </div>
+    </article>`;
 }
 
-async function saveNow() {
-  const log = ensureLog(currentDate);
-  log.raw_input = $("#raw-input").value;
-  log.metadata = { ...(log.metadata || {}), updated_at: new Date().toISOString() };
-  await persistState();
-  $("#autosave-status").querySelector("span:last-child").textContent = `已保存 · ${formatTime(new Date().toISOString())}`;
-  showToast("已保存。原始记录完整保留在 app 中。");
+function renderMonth() {
+  $("#month-title").textContent = formatMonth(calendarMonth);
+  renderFocusItems($("#month-focus-items"), calendarMonth);
+  renderCalendar();
+  renderSelectedDay();
+  renderMonthSummary();
 }
 
-function renderTodos(log) {
-  const todos = log.todos || [];
-  $("#todo-count").textContent = `${todos.filter((todo) => todo.done).length}/${todos.length}`;
-  $("#todo-list").innerHTML = todos.length ? todos.map((todo) => `
-    <div class="todo-item" data-todo-id="${escapeHtml(todo.id)}">
-      <input type="checkbox" ${todo.done ? "checked" : ""} aria-label="完成：${escapeHtml(todo.text)}" />
-      <span class="${todo.done ? "done" : ""}">${escapeHtml(todo.text)}</span>
-      <button type="button" class="remove-button" data-delete-todo aria-label="删除这件事">×</button>
-    </div>`).join("") : `<p class="empty-note">这里可以放今天要托住的小事。没有也很好。</p>`;
-}
-
-async function addTodo(event) {
-  event.preventDefault();
-  const input = $("#todo-input");
-  const text = input.value.trim();
-  if (!text) return;
-  const log = ensureLog(currentDate);
-  log.todos.push({ id: uid("todo"), text, done: false, created_at: new Date().toISOString() });
-  input.value = ""; await persistState(); renderTodos(log);
-}
-
-async function handleTodoClick(event) {
-  const item = event.target.closest("[data-todo-id]");
-  if (!item) return;
-  const log = ensureLog(currentDate);
-  if (event.target.matches("input[type='checkbox']")) {
-    const todo = log.todos.find((value) => value.id === item.dataset.todoId);
-    if (todo) { todo.done = event.target.checked; todo.completed_at = todo.done ? new Date().toISOString() : null; }
-  }
-  if (event.target.closest("[data-delete-todo]")) log.todos = log.todos.filter((value) => value.id !== item.dataset.todoId);
-  await persistState(); renderTodos(log);
-}
-
-function renderDetailStack(log) {
-  $("#detail-stack").innerHTML = [renderSleepPanel(), renderMovementPanel(), renderChoresPanel(), renderDailyLeisurePanel(), renderSpiritualPanel()].join("");
-  populateDetail("sleep", log.confirmed_details?.sleep);
-  populateDetail("movement", log.confirmed_details?.movement);
-  populateDetail("chores", log.confirmed_details?.chores);
-  populateDetail("spiritual", log.confirmed_details?.spiritual);
-  markFilledPanels(log);
-}
-
-function panelShell(type, mark, markClass, title, subtitle, content) {
-  return `<details class="detail-panel" data-detail="${type}"><summary><span class="detail-mark ${markClass}">${mark}</span><span><strong>${title}</strong><small>${subtitle}</small></span></summary><div class="detail-content" id="${type}-form">${content}</div></details>`;
-}
-
-function chips(values) {
-  return `<div class="chip-checks" data-tags>${values.map((value) => `<label><input type="checkbox" value="${escapeHtml(value)}" /><span>${escapeHtml(value)}</span></label>`).join("")}</div>`;
-}
-
-function renderSleepPanel() {
-  return panelShell("sleep", "睡", "sky", "睡眠", "昨晚睡得如何？", `
-    <fieldset><legend>整体感受</legend><div class="segmented-control">${["好", "一般", "差"].map((v) => `<label><input type="radio" name="sleep-quality" value="${v}" /><span>${v}</span></label>`).join("")}</div></fieldset>
-    <div class="two-fields three-fields">
-      <label>睡眠时长<input data-metric="sleepHours" type="number" inputmode="decimal" min="0" step="0.5" /><small>小时</small></label>
-      <label>午睡/补觉<input data-metric="napMinutes" type="number" inputmode="numeric" min="0" step="5" /><small>分钟</small></label>
-      <label>恢复感<input data-metric="sleepRecovery" type="number" inputmode="numeric" min="1" max="5" /><small>/5</small></label>
-    </div>
-    ${chips(["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适", "睡得沉"])}
-    <label class="field-label">睡前活动<textarea data-extra="bedtimeActivity" rows="2" placeholder="例如聊天、刷手机、读书、祷告"></textarea></label>
-    <label class="field-label">影响睡眠的因素<textarea data-extra="sleepFactors" rows="2" placeholder="例如鸟叫、噪音、光线、身体不适"></textarea></label>`);
-}
-
-function renderMovementPanel() {
-  return panelShell("movement", "动", "mint-bg", "运动", "今天是否有一点点活动？", `
-    ${chips(["八段锦", "普拉提", "跑步机上坡走", "散步/走路", "拉伸", "HIIT", "力量训练", "其他"])}
-    <div class="two-fields"><label>时长<input data-metric="movementMinutes" type="number" inputmode="numeric" min="0" step="5" /><small>分钟</small></label><label>距离<input data-metric="walkKm" type="number" inputmode="decimal" min="0" step="0.1" /><small>公里</small></label></div>
-    <label class="field-label">身体感受<textarea data-note rows="2" placeholder="过程中或结束后，身体感觉如何？"></textarea></label>`);
-}
-
-function renderChoresPanel() {
-  return panelShell("chores", "务", "warm", "庶务管理", "基础生活照料", chips(["洗澡", "洗衣", "排便", "自我按摩"]));
-}
-
-function renderDailyLeisurePanel() {
-  return panelShell("leisure", "闲", "lilac-bg", "闲暇", "看、读、玩了什么？", `
-    <div class="form-stack" id="daily-leisure-fields"><label class="field-label">名称<input data-field="title" type="text" placeholder="剧、综艺、游戏、书、文章……" /></label>
-    <div class="two-fields plain"><label>类型<select data-field="kind">${optionHtml(leisureOptions.kind, "article")}</select></label><label>感受<select data-field="feeling">${optionHtml(leisureOptions.feeling, "plain")}</select></label></div>
-    <label class="field-label">进度<input data-field="progress" type="text" placeholder="例如 S1E3、第 120 页、读完一半" /></label>
-    <label class="field-label">一句话<textarea data-field="note" rows="2" placeholder="为什么想继续，或者它留下了什么。"></textarea></label>
-    <button class="inline-save" id="save-daily-leisure" type="button">保存到闲暇清单</button></div>`);
-}
-
-function renderSpiritualPanel() {
-  return panelShell("spiritual", "灵", "rose", "灵修", "今天是否有灵修？", `${chips(["祷告", "读经", "默想", "敬拜", "阅读属灵读物"])}<label class="field-label">想留下的触动<textarea data-note rows="3" placeholder="触动、提醒、问题、挣扎或领受；可以只写一句。"></textarea></label>`);
-}
-
-function optionHtml(map, selected = "") {
-  return Object.entries(map).map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
-}
-
-function populateDetail(type, value = {}) {
-  const panel = $(`[data-detail="${type}"]`);
-  if (!panel) return;
-  for (const input of panel.querySelectorAll("[data-tags] input")) input.checked = (value.tags || []).includes(input.value);
-  for (const input of panel.querySelectorAll("[data-metric]")) input.value = value.metrics?.[input.dataset.metric] ?? "";
-  for (const input of panel.querySelectorAll("[data-extra]")) input.value = value.extras?.[input.dataset.extra] || "";
-  const note = panel.querySelector("[data-note]");
-  if (note) note.value = value.note || "";
-  const quality = panel.querySelector(`input[name="${type}-quality"][value="${CSS.escape(value.quality || "")}"]`);
-  if (quality) quality.checked = true;
-}
-
-function collectDetail(type) {
-  const panel = $(`[data-detail="${type}"]`);
-  const tags = [...panel.querySelectorAll("[data-tags] input:checked")].map((input) => input.value);
-  const metrics = {};
-  for (const input of panel.querySelectorAll("[data-metric]")) if (input.value !== "") metrics[input.dataset.metric] = Number(input.value);
-  const extras = {};
-  for (const input of panel.querySelectorAll("[data-extra]")) if (input.value.trim()) extras[input.dataset.extra] = input.value.trim();
-  const note = panel.querySelector("[data-note]")?.value.trim() || "";
-  const quality = panel.querySelector(`input[name="${type}-quality"]:checked`)?.value || "";
-  return { tags, metrics, extras, note, quality };
-}
-
-function detailHasContent(value) {
-  return Boolean(value?.tags?.length || Object.keys(value?.metrics || {}).length || Object.keys(value?.extras || {}).length || value?.note || value?.quality || value?.items?.length || value?.ai_facts?.length);
-}
-
-function saveDetailFromEvent(event) {
-  const panel = event.target.closest("[data-detail]");
-  if (!panel || panel.dataset.detail === "leisure") return;
-  const type = panel.dataset.detail;
-  clearTimeout(detailTimer);
-  detailTimer = setTimeout(async () => {
-    const log = ensureLog(currentDate);
-    const value = collectDetail(type);
-    if (detailHasContent(value)) log.confirmed_details[type] = value;
-    else delete log.confirmed_details[type];
-    log.metadata.updated_at = new Date().toISOString();
-    await persistState(); markFilledPanels(log);
-  }, 350);
-}
-
-function markFilledPanels(log) {
-  for (const panel of $$(".detail-panel")) panel.classList.toggle("has-data", detailHasContent(log.confirmed_details?.[panel.dataset.detail]));
-}
-
-async function saveDailyLeisure() {
-  const fields = $("#daily-leisure-fields");
-  const title = fields.querySelector('[data-field="title"]').value.trim();
-  if (!title) { showToast("先写下名称，再保存到闲暇清单。"); return; }
-  const item = {
-    id: uid("leisure"), title, kind: fields.querySelector('[data-field="kind"]').value, status: "watching",
-    progress: fields.querySelector('[data-field="progress"]').value.trim(), context: "bored", feeling: fields.querySelector('[data-field="feeling"]').value,
-    note: fields.querySelector('[data-field="note"]').value.trim(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), metadata: { source: "daily-detail" },
-  };
-  state.leisure_items.push(item);
-  const log = ensureLog(currentDate);
-  const detail = log.confirmed_details.leisure || { items: [] };
-  detail.items = [...new Set([...(detail.items || []), item.id])];
-  log.confirmed_details.leisure = detail;
-  await persistState(); renderDetailStack(log); showToast("已放进闲暇清单，也记在今天。");
-}
-
-function markAiStale(log) {
-  if (!log.ai_organized) return;
-  const stale = log.ai_organized.metadata?.source_hash !== fingerprint(log.raw_input || "");
-  $("#stale-notice").hidden = !stale;
-  $("#organize-button .button-label").textContent = stale ? "重新整理今天" : "再次整理";
-}
-
-function renderAi(log) {
-  const ai = log.ai_organized;
-  $("#ai-section").hidden = !ai;
-  if (!ai) { $("#organize-button .button-label").textContent = "帮我整理今天"; return; }
-  $("#ai-summary").textContent = ai.summary || ai.daily_sentence || "";
-  $("#ai-reflection").textContent = ai.reflection || "";
-  $("#theme-row").innerHTML = (ai.themes || []).map((theme) => `<span>${escapeHtml(theme)}</span>`).join("");
-  const facts = ai.facts || [];
-  $("#extracted-fields").innerHTML = facts.length ? facts.map((fact, index) => `
-    <div class="extracted-row" data-fact-index="${index}">
-      <input type="checkbox" ${fact.selected !== false ? "checked" : ""} ${ai.confirmed ? "disabled" : ""} aria-label="将${escapeHtml(fact.label || fact.category)}记入复盘" />
-      <span class="extracted-name">${escapeHtml(fact.label || fact.category)}</span>
-      <input class="extracted-value" type="text" value="${escapeHtml(fact.value || "")}" ${ai.confirmed ? "disabled" : ""} aria-label="${escapeHtml(fact.label || fact.category)}提取结果" />
-    </div>`).join("") : `<p class="empty-note">没有提取到需要单独确认的内容。</p>`;
-  $("#confirmation-state").textContent = ai.confirmed ? "已确认" : "待确认";
-  $("#confirmation-state").classList.toggle("confirmed", Boolean(ai.confirmed));
-  $("#confirm-button").disabled = Boolean(ai.confirmed);
-  $("#confirm-button").textContent = ai.confirmed ? "已记入复盘" : "确认并记入复盘";
-  $("#extracted-fields").classList.toggle("locked", Boolean(ai.confirmed));
-  $("#ai-version").textContent = `第 ${(log.ai_versions?.length || 0) + 1} 版`;
-  const meta = ai.metadata || {};
-  $("#generated-time").textContent = [meta.model, meta.generated_at ? formatTime(meta.generated_at) : "", meta.prompt_version].filter(Boolean).join(" · ");
-  markAiStale(log);
-}
-
-async function organizeToday() {
-  const log = ensureLog(currentDate);
-  log.raw_input = $("#raw-input").value;
-  if (!log.raw_input.trim()) { showToast("先留下一点原始记录，再请 AI 整理。"); $("#raw-input").focus(); return; }
-  const { ai_api_url: url, ai_access_code: code } = state.settings;
-  if (!url || !code) { switchView("backup-view"); $("#ai-settings").scrollIntoView({ behavior: "smooth" }); showToast("先在备份与设置里连接 AI 接口。"); return; }
-  const button = $("#organize-button");
-  button.disabled = true; button.classList.add("is-loading"); button.querySelector(".button-label").hidden = true; button.querySelector(".button-progress").hidden = false;
-  try {
-    await persistState();
-    const response = await fetch(url, {
-      method: "POST", headers: { "Content-Type": "application/json", "X-App-Access-Code": code },
-      body: JSON.stringify({ date: currentDate, raw_input: log.raw_input, confirmed_details: log.confirmed_details, prompt_version: PROMPT_VERSION }),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ai_organized) throw new Error(result.error || "AI 整理暂时没有完成");
-    if (log.ai_organized) log.ai_versions = [...(log.ai_versions || []), log.ai_organized].slice(-5);
-    log.ai_organized = {
-      ...result.ai_organized,
-      confirmed: false,
-      facts: (result.ai_organized.facts || []).map((fact) => ({ ...fact, selected: true })),
-      metadata: { ...(result.metadata || {}), source_hash: fingerprint(log.raw_input), prompt_version: result.metadata?.prompt_version || PROMPT_VERSION },
-    };
-    await persistState(); renderAi(log); $("#ai-section").scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (error) {
-    showToast(`${error.message || "AI 整理失败"}。原始记录和旧整理都没有变化。`);
-  } finally {
-    button.disabled = false; button.classList.remove("is-loading"); button.querySelector(".button-label").hidden = false; button.querySelector(".button-progress").hidden = true;
-  }
-}
-
-async function confirmAi() {
-  const log = ensureLog(currentDate);
-  if (!log.ai_organized) return;
-  const facts = [...$("#extracted-fields").querySelectorAll("[data-fact-index]")].map((row) => {
-    const original = log.ai_organized.facts[Number(row.dataset.factIndex)];
-    return { ...original, selected: row.querySelector('input[type="checkbox"]').checked, value: row.querySelector(".extracted-value").value.trim() };
+function calendarDates(key) {
+  const first = dateFromKey(firstDateOfMonth(key));
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return keyFromDate(date);
   });
-  log.ai_organized.facts = facts;
-  log.ai_organized.confirmed = true;
-  log.confirmed_details.ai_facts = facts.filter((fact) => fact.selected).map(({ category, label, value }) => ({ category, label, value }));
-  await persistState(); renderAi(log); showToast("已确认。原始记录仍完整保留。");
 }
 
-function adjustAi() {
-  const log = ensureLog(currentDate);
-  if (!log.ai_organized) return;
-  log.ai_organized.confirmed = false;
-  renderAi(log);
-  $("#extracted-fields .extracted-value")?.focus();
+function renderCalendar() {
+  const today = todayKey();
+  $("#calendar-grid").innerHTML = calendarDates(calendarMonth).map((date) => {
+    const traces = tracesForDate(date);
+    const summaries = traces.map(traceSummary);
+    const markerTrackers = [...new Map(traces.map((trace) => {
+      const tracker = trackerById(trace.trackerId) || { short: "记", tone: "blue" };
+      return [trace.trackerId, tracker];
+    })).values()];
+    const classes = ["calendar-day"];
+    if (monthKey(date) !== calendarMonth) classes.push("outside");
+    if (date === selectedCalendarDate) classes.push("selected");
+    if (date === today) classes.push("today");
+    const desktopLines = traces.slice(0, 3).map((trace) => `<span class="day-trace ${toneClass(trace.trackerId)}">${escapeHtml(traceSummary(trace))}</span>`).join("");
+    const desktopMore = summaries.length > 3 ? `<span class="more-count">+${summaries.length - 3}</span>` : "";
+    const markers = markerTrackers.slice(0, 3).map((tracker) => `<span class="${toneClass(tracker)}">${escapeHtml(tracker.short || "记")}</span>`).join("");
+    const markerMore = markerTrackers.length > 3 ? `<span class="tone-blue">+${markerTrackers.length - 3}</span>` : "";
+    return `
+      <button class="${classes.join(" ")}" type="button" data-calendar-date="${date}" aria-label="${escapeAttr(formatDay(date))}，${traces.length} 条月历痕迹">
+        <span class="day-number">${Number(date.slice(-2))}</span>
+        <span class="day-traces">${desktopLines}${desktopMore}</span>
+        <span class="mobile-markers">${markers}${markerMore}</span>
+      </button>`;
+  }).join("");
 }
 
-function recordedDates() {
-  return Object.keys(state.daily_logs_by_date).filter((date) => hasLogContent(state.daily_logs_by_date[date])).sort().reverse();
-}
-
-function previewText(log) {
-  return (log.raw_input || log.metadata?.source_markdown || "").replace(/【[^】]+】/g, " ").replace(/^#+\s.*$/gm, " ").replace(/\s+/g, " ").trim().slice(0, 118);
-}
-
-function recordTags(log) {
-  const tags = [];
-  for (const key of ["sleep", "movement", "chores", "spiritual", "leisure"]) if (detailHasContent(log.confirmed_details?.[key])) tags.push(detailLabels[key]);
-  for (const theme of log.ai_organized?.themes || []) if (!tags.includes(theme)) tags.push(theme);
-  return tags.slice(0, 5);
-}
-
-function renderRecords() {
-  $("#record-month").value = selectedMonth;
-  const all = recordedDates();
-  const dates = selectedMonth ? all.filter((date) => date.startsWith(selectedMonth)) : all;
-  $("#record-total").textContent = `${dates.length} 天`;
-  $("#record-list").innerHTML = dates.length ? dates.map((date) => {
-    const log = state.daily_logs_by_date[date];
-    const tags = recordTags(log);
-    return `<button class="record-row" type="button" data-open-record="${date}">
-      <span class="record-date"><strong>${formatDate(date, { month: "numeric", day: "numeric" })}</strong><small>${formatDate(date, { weekday: "short" })}</small></span>
-      <span class="record-preview"><strong>${escapeHtml(previewText(log) || "这一天留下了结构化记录")}</strong><span>${tags.map((tag) => `<i>${escapeHtml(tag)}</i>`).join("")}${log.metadata?.source === "markdown-import" ? "<i>历史导入</i>" : ""}</span></span>
-      <span class="record-arrow" aria-hidden="true">›</span>
-    </button>`;
-  }).join("") : `<p class="empty-state">这个月份还没有记录。日期本身不需要被填满。</p>`;
-  $("#record-detail").hidden = true;
-}
-
-function renderRecordDetail(date) {
-  const log = state.daily_logs_by_date[date];
-  if (!log) return;
-  const detail = $("#record-detail");
-  const imported = log.metadata?.source === "markdown-import";
-  detail.innerHTML = `
-    <div class="record-detail-heading"><button type="button" class="text-button" data-close-record>‹ 返回记录</button><span>${imported ? "历史导入 · 原文保留" : "app 记录"}</span></div>
-    <h2>${formatDate(date, { year: "numeric", month: "long", day: "numeric", weekday: "long" })}</h2>
-    <section class="raw-record"><h3>原始记录</h3><pre>${escapeHtml(log.raw_input || "这一天没有自然语言记录。")}</pre></section>
-    ${renderRecordedDetails(log)}
-    ${log.ai_organized ? `<section class="record-ai"><h3>AI 整理</h3><p>${escapeHtml(log.ai_organized.summary || "")}</p><p>${escapeHtml(log.ai_organized.reflection || "")}</p></section>` : ""}
-    ${renderAiVersions(log)}
-    ${imported ? `<details class="source-proof"><summary>查看原始导入 Markdown</summary><pre>${escapeHtml(log.metadata.source_markdown || "")}</pre></details>` : ""}
-    <div class="record-actions"><button type="button" class="secondary-button" data-edit-date="${date}">编辑这一天</button><button type="button" class="primary-button" data-export-date="${date}">导出这一天</button></div>`;
-  $("#record-list").hidden = true;
-  detail.hidden = false;
-  detail.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function renderAiVersions(log) {
-  const versions = log.ai_versions || [];
-  if (!versions.length) return "";
-  return `<details class="source-proof"><summary>查看过去 ${versions.length} 版 AI 整理</summary>${versions.slice().reverse().map((version) => `<div class="ai-version-item"><strong>${escapeHtml(version.metadata?.generated_at ? formatTime(version.metadata.generated_at) : "较早版本")}</strong><p>${escapeHtml(version.summary || "")}</p></div>`).join("")}</details>`;
-}
-
-function renderRecordedDetails(log) {
-  const details = log.confirmed_details || {};
-  const blocks = [];
-  for (const type of ["sleep", "movement", "chores", "spiritual", "leisure"]) {
-    const value = details[type];
-    if (!detailHasContent(value)) continue;
-    const lines = [];
-    if (value.tags?.length) lines.push(value.tags.join("，"));
-    if (value.metrics && formatMetrics(value.metrics)) lines.push(formatMetrics(value.metrics));
-    if (value.note) lines.push(value.note);
-    if (value.items?.length) lines.push(`${value.items.length} 个闲暇条目`);
-    blocks.push(`<div><strong>${detailLabels[type]}</strong><p>${escapeHtml(lines.join(" · "))}</p></div>`);
+function renderSelectedDay() {
+  $("#selected-day-title").textContent = formatDay(selectedCalendarDate, true);
+  const traces = tracesForDate(selectedCalendarDate);
+  const notes = notesForDate(selectedCalendarDate);
+  if (!traces.length && !notes.length) {
+    $("#selected-day-content").innerHTML = `<p class="empty-copy">这一天还没有留下内容。</p>`;
+    return;
   }
-  for (const fact of details.ai_facts || []) blocks.push(`<div><strong>${escapeHtml(fact.label || fact.category)}</strong><p>${escapeHtml(fact.value)}</p></div>`);
-  return blocks.length ? `<section class="recorded-details"><h3>已确认的详情</h3>${blocks.join("")}</section>` : "";
+
+  const traceRows = traces.length ? `
+    <div class="day-detail-list">
+      ${traces.map((trace) => {
+        const tracker = trackerById(trace.trackerId);
+        return `<div class="day-detail-row ${toneClass(tracker)}"><strong>${escapeHtml(tracker?.name || "记录")}</strong><p>${escapeHtml(traceDetail(trace))}</p></div>`;
+      }).join("")}
+    </div>` : "";
+  const originals = notes.length ? `
+    <div class="day-originals">
+      <strong>当天原文</strong>
+      ${notes.map((note) => `<p><time>${escapeHtml(noteTimeLabel(note))}</time>　${escapeHtml(note.text)}</p>`).join("")}
+    </div>` : "";
+  $("#selected-day-content").innerHTML = traceRows + originals;
 }
 
-function formatMetrics(metrics = {}) {
-  return Object.entries(metrics).filter(([, value]) => value !== "" && value != null).map(([key, value]) => `${metricLabels[key]?.[0] || key} ${value}${metricLabels[key]?.[1] || ""}`).join("，");
+function renderMonthSummary() {
+  const monthTraces = state.traces.filter((trace) => monthKey(trace.date) === calendarMonth);
+  if (!monthTraces.length) {
+    $("#summary-list").innerHTML = `<p class="empty-copy">这个月还没有可汇总的月历痕迹。</p>`;
+    return;
+  }
+  const grouped = new Map();
+  monthTraces.forEach((trace) => {
+    if (!grouped.has(trace.trackerId)) grouped.set(trace.trackerId, []);
+    grouped.get(trace.trackerId).push(trace);
+  });
+  const focusIds = getMonthFocusIds(calendarMonth);
+  const ids = [...grouped.keys()].sort((a, b) => {
+    const ai = focusIds.indexOf(a);
+    const bi = focusIds.indexOf(b);
+    if (ai >= 0 || bi >= 0) return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    return (trackerById(a)?.name || "").localeCompare(trackerById(b)?.name || "", "zh-CN");
+  });
+  $("#summary-list").innerHTML = ids.map((id) => {
+    const tracker = trackerById(id);
+    return `<div class="summary-row ${toneClass(tracker)}"><strong>${escapeHtml(tracker?.name || "记录")}</strong><p>${escapeHtml(summarizeTracker(tracker, grouped.get(id)))}</p></div>`;
+  }).join("");
 }
 
-function populateLeisureSelects() {
-  $("#leisure-kind").innerHTML = optionHtml(leisureOptions.kind);
-  $("#leisure-status").innerHTML = optionHtml(leisureOptions.status);
-  $("#leisure-context").innerHTML = optionHtml(leisureOptions.context);
-  $("#leisure-feeling").innerHTML = optionHtml(leisureOptions.feeling);
+function numeric(value) {
+  const number = Number.parseFloat(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
-function renderLeisure() {
-  const items = [...state.leisure_items].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
-  $("#leisure-count").textContent = `${items.length} 个`;
-  $("#leisure-list").innerHTML = items.length ? items.map((item) => `
-    <article class="leisure-card" data-leisure-id="${escapeHtml(item.id)}">
-      <div class="leisure-meta"><span>${leisureOptions.kind[item.kind] || "其他"}</span><span>${leisureOptions.status[item.status] || "稍后"}</span><span>${leisureOptions.feeling[item.feeling] || "一般"}</span></div>
-      <h3>${escapeHtml(item.title)}</h3>${item.progress ? `<p>进度：${escapeHtml(item.progress)}</p>` : ""}${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}
-      <div class="card-actions"><button type="button" data-log-leisure>记到今天</button><button type="button" data-edit-leisure>编辑</button><button type="button" class="danger" data-delete-leisure>删除</button></div>
-    </article>`).join("") : `<p class="empty-state">还没有闲暇条目。下一次想起一部剧、一本书或一篇文章，可以先放这里。</p>`;
+function formatNumber(value, digits = 1) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(digits).replace(/\.0$/, "");
 }
 
-async function submitLeisure(event) {
+function countValues(values) {
+  const counts = new Map();
+  values.filter(Boolean).forEach((value) => counts.set(value, (counts.get(value) || 0) + 1));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([value, count]) => `${value}${count > 1 ? ` ${count}次` : ""}`);
+}
+
+function summarizeTracker(tracker, traces) {
+  const days = new Set(traces.map((trace) => trace.date)).size;
+  const count = traces.length;
+  if (!tracker) return `${days} 天 · ${count} 次`;
+  if (tracker.preset === "movement") {
+    const minutes = traces.reduce((sum, trace) => sum + numeric(trace.fields?.durationMin), 0);
+    const distance = traces.reduce((sum, trace) => sum + numeric(trace.fields?.distanceKm), 0);
+    return `${days} 天 · ${count} 次${minutes ? ` · ${formatNumber(minutes, 0)} 分钟` : ""}${distance ? ` · ${formatNumber(distance)} 公里` : ""}`;
+  }
+  if (tracker.preset === "reading") {
+    const titles = [...new Set(traces.map((trace) => trace.fields?.title).filter(Boolean))];
+    const progressByUnit = new Map();
+    traces.forEach((trace) => {
+      const value = numeric(trace.fields?.progressValue);
+      const unit = trace.fields?.progressUnit;
+      if (value && unit) progressByUnit.set(unit, (progressByUnit.get(unit) || 0) + value);
+    });
+    const progress = [...progressByUnit].map(([unit, value]) => `${formatNumber(value)}${unit}`).join("、");
+    return `${days} 天${titles.length ? ` · ${titles.slice(0, 3).join("、")}${titles.length > 3 ? `等 ${titles.length} 项` : ""}` : ""}${progress ? ` · ${progress}` : ""}`;
+  }
+  if (tracker.preset === "people") {
+    const names = [...new Set(traces.map((trace) => trace.fields?.name).filter(Boolean))];
+    return `${days} 天 · ${count} 次${names.length ? ` · ${names.join("、")}` : ""}`;
+  }
+  if (tracker.preset === "body") {
+    const signals = countValues(traces.map((trace) => trace.fields?.signal));
+    return `${days} 天${signals.length ? ` · ${signals.join("、")}` : ` · ${count} 次记录`}`;
+  }
+  if (tracker.preset === "sleep") {
+    const hours = traces.map((trace) => numeric(trace.fields?.hours)).filter(Boolean);
+    const average = hours.length ? hours.reduce((sum, value) => sum + value, 0) / hours.length : 0;
+    const quality = countValues(traces.map((trace) => trace.fields?.quality));
+    return `记录 ${days} 天${average ? ` · 平均 ${formatNumber(average)} 小时` : ""}${quality.length ? ` · ${quality.join("、")}` : ""}`;
+  }
+  if (tracker.mode === "duration") {
+    const minutes = traces.reduce((sum, trace) => sum + numeric(trace.fields?.durationMin), 0);
+    return `${days} 天 · ${count} 次${minutes ? ` · ${formatNumber(minutes, 0)} 分钟` : ""}`;
+  }
+  if (tracker.mode === "quantity") {
+    const total = traces.reduce((sum, trace) => sum + numeric(trace.fields?.quantity), 0);
+    return `${days} 天 · ${count} 次${total ? ` · ${formatNumber(total)}${tracker.unit || ""}` : ""}`;
+  }
+  if (tracker.mode === "state") {
+    const states = countValues(traces.map((trace) => trace.fields?.state));
+    return `${days} 天${states.length ? ` · ${states.join("、")}` : ` · ${count} 次记录`}`;
+  }
+  return `${days} 天 · ${count} 次`;
+}
+
+function traceSummary(trace) {
+  const tracker = trackerById(trace.trackerId);
+  const fields = trace.fields || {};
+  if (!tracker) return "记录";
+  if (tracker.preset === "movement") {
+    return `${fields.activity || "运动"}${fields.durationMin ? ` ${formatNumber(numeric(fields.durationMin), 0)}m` : ""}${fields.distanceKm ? ` ${formatNumber(numeric(fields.distanceKm))}km` : ""}`;
+  }
+  if (tracker.preset === "reading") {
+    const title = fields.title ? `《${fields.title}》` : "阅读";
+    return `${fields.itemType === "文章" ? "读文" : "读"}${title}${fields.progressValue ? ` ${formatNumber(numeric(fields.progressValue))}${fields.progressUnit || ""}` : ""}`;
+  }
+  if (tracker.preset === "people") return fields.name ? `和 ${fields.name}` : "社交";
+  if (tracker.preset === "body") return fields.signal || "身体";
+  if (tracker.preset === "sleep") return `睡${fields.hours ? ` ${formatNumber(numeric(fields.hours))}h` : ""}${fields.quality ? ` · ${fields.quality}` : ""}`;
+  const detail = fields.detail || fields.state || "";
+  if (tracker.mode === "duration" && fields.durationMin) return `${detail || tracker.name} ${formatNumber(numeric(fields.durationMin), 0)}m`;
+  if (tracker.mode === "quantity" && fields.quantity) return `${detail || tracker.name} ${formatNumber(numeric(fields.quantity))}${tracker.unit || ""}`;
+  return detail ? `${tracker.name} · ${detail}` : tracker.name;
+}
+
+function traceDetail(trace) {
+  const tracker = trackerById(trace.trackerId);
+  const fields = trace.fields || {};
+  const parts = [traceSummary(trace)];
+  if (tracker?.preset === "people" && fields.context) parts.push(fields.context);
+  if (tracker?.preset === "sleep" && fields.factors) parts.push(`影响：${fields.factors}`);
+  return parts.join("；");
+}
+
+function renderTraceChoices() {
+  const note = noteById(activeTraceNoteId);
+  if (!note) return;
+  const focusIds = getMonthFocusIds(monthKey(note.date));
+  const remaining = state.trackers.filter((tracker) => !focusIds.includes(tracker.id));
+  $("#month-tracker-choices").innerHTML = focusIds.map(trackerChoiceButton).join("");
+  $("#more-tracker-choices").innerHTML = remaining.map((tracker) => trackerChoiceButton(tracker.id)).join("");
+  renderTraceFields();
+}
+
+function trackerChoiceButton(id) {
+  const tracker = trackerById(id);
+  if (!tracker) return "";
+  const pressed = selectedTraceTrackers.has(id);
+  return `<button class="tracker-choice ${toneClass(tracker)}" type="button" data-tracker-choice="${escapeAttr(id)}" aria-pressed="${pressed}">${escapeHtml(tracker.name)}</button>`;
+}
+
+function captureTraceDrafts() {
+  $$("[data-tracker-fields]", $("#trace-fields")).forEach((fieldset) => {
+    const trackerId = fieldset.dataset.trackerFields;
+    const fields = {};
+    $$('[data-field]', fieldset).forEach((input) => { fields[input.dataset.field] = input.value; });
+    traceDrafts[trackerId] = fields;
+  });
+}
+
+function renderTraceFields() {
+  const ordered = state.trackers.filter((tracker) => selectedTraceTrackers.has(tracker.id));
+  $("#trace-fields").innerHTML = ordered.map((tracker) => traceFieldset(tracker, traceDrafts[tracker.id] || {})).join("");
+}
+
+function inputField(label, field, value = "", options = {}) {
+  const type = options.type || "text";
+  const attrs = [
+    `type="${type}"`,
+    `data-field="${escapeAttr(field)}"`,
+    `value="${escapeAttr(value)}"`,
+    options.placeholder ? `placeholder="${escapeAttr(options.placeholder)}"` : "",
+    options.step ? `step="${escapeAttr(options.step)}"` : "",
+    options.min !== undefined ? `min="${escapeAttr(options.min)}"` : "",
+    options.max !== undefined ? `max="${escapeAttr(options.max)}"` : "",
+    options.inputmode ? `inputmode="${escapeAttr(options.inputmode)}"` : ""
+  ].filter(Boolean).join(" ");
+  return `<label class="${options.full ? "full" : ""}">${escapeHtml(label)}<input ${attrs} /></label>`;
+}
+
+function selectField(label, field, value, choices, full = false) {
+  return `<label class="${full ? "full" : ""}">${escapeHtml(label)}<select data-field="${escapeAttr(field)}">${choices.map((choice) => `<option value="${escapeAttr(choice)}" ${choice === value ? "selected" : ""}>${escapeHtml(choice)}</option>`).join("")}</select></label>`;
+}
+
+function traceFieldset(tracker, fields) {
+  let content = "";
+  if (tracker.preset === "movement") {
+    content = inputField("做了什么", "activity", fields.activity, { placeholder: "例如：跑步机上坡走", full: true })
+      + inputField("分钟", "durationMin", fields.durationMin, { type: "number", inputmode: "decimal", min: 0, step: 1 })
+      + inputField("公里数", "distanceKm", fields.distanceKm, { type: "number", inputmode: "decimal", min: 0, step: 0.1 });
+  } else if (tracker.preset === "reading") {
+    content = selectField("类型", "itemType", fields.itemType || "书", ["书", "文章"])
+      + inputField("名称", "title", fields.title, { placeholder: "书名或文章名", full: true })
+      + inputField("进度", "progressValue", fields.progressValue, { type: "number", inputmode: "decimal", min: 0, step: 1 })
+      + selectField("单位", "progressUnit", fields.progressUnit || "页", ["页", "章", "分钟", "篇"]);
+  } else if (tracker.preset === "people") {
+    content = inputField("对象或简称", "name", fields.name, { placeholder: "例如：L、家人、同事", full: true })
+      + inputField("互动情境", "context", fields.context, { placeholder: "例如：晚饭，聊近况", full: true });
+  } else if (tracker.preset === "body") {
+    content = inputField("身体信号", "signal", fields.signal, { placeholder: "例如：头痛、浮肿、肩背紧", full: true });
+  } else if (tracker.preset === "sleep") {
+    content = inputField("睡眠时长（小时）", "hours", fields.hours, { type: "number", inputmode: "decimal", min: 0, max: 24, step: 0.1 })
+      + selectField("睡得如何", "quality", fields.quality || "", ["", "好", "一般", "差"])
+      + inputField("影响因素", "factors", fields.factors, { placeholder: "例如：鸟叫、早醒、睡前活动", full: true });
+  } else if (tracker.mode === "duration") {
+    content = inputField("简短痕迹", "detail", fields.detail, { placeholder: "发生了什么", full: true })
+      + inputField("分钟", "durationMin", fields.durationMin, { type: "number", inputmode: "decimal", min: 0, step: 1 });
+  } else if (tracker.mode === "quantity") {
+    content = inputField("简短痕迹", "detail", fields.detail, { placeholder: "发生了什么", full: true })
+      + inputField(`数量${tracker.unit ? `（${tracker.unit}）` : ""}`, "quantity", fields.quantity, { type: "number", inputmode: "decimal", min: 0, step: 0.1 });
+  } else if (tracker.mode === "state") {
+    content = inputField("状态", "state", fields.state, { placeholder: "用几个字留下状态", full: true });
+  } else {
+    content = inputField("简短痕迹", "detail", fields.detail, { placeholder: "可以留空", full: true });
+  }
+  return `<fieldset class="trace-fieldset" data-tracker-fields="${escapeAttr(tracker.id)}"><legend>${escapeHtml(tracker.name)}</legend><div class="field-grid">${content}</div></fieldset>`;
+}
+
+function openTraceDialog(noteId) {
+  const note = noteById(noteId);
+  if (!note) return;
+  activeTraceNoteId = noteId;
+  const existing = tracesForNote(noteId);
+  selectedTraceTrackers = new Set(existing.map((trace) => trace.trackerId));
+  traceDrafts = Object.fromEntries(existing.map((trace) => [trace.trackerId, { ...(trace.fields || {}) }]));
+  $("#trace-note-preview").textContent = note.text;
+  $("#toggle-more-trackers").setAttribute("aria-expanded", "false");
+  $("#more-tracker-choices").hidden = true;
+  renderTraceChoices();
+  $("#trace-dialog").showModal();
+}
+
+function saveTracesForActiveNote() {
+  captureTraceDrafts();
+  const note = noteById(activeTraceNoteId);
+  if (!note) return;
+  const existing = new Map(tracesForNote(note.id).map((trace) => [trace.trackerId, trace]));
+  state.traces = state.traces.filter((trace) => trace.noteId !== note.id);
+  selectedTraceTrackers.forEach((trackerId) => {
+    const old = existing.get(trackerId);
+    state.traces.push({
+      id: old?.id || makeId("trace"),
+      noteId: note.id,
+      date: note.date,
+      trackerId,
+      fields: { ...(traceDrafts[trackerId] || {}) },
+      createdAt: old?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  });
+  persistState();
+  $("#trace-dialog").close();
+  renderAll();
+  showToast(selectedTraceTrackers.size ? "月历痕迹已更新。" : "原文保留，没有加入月历。");
+}
+
+function removeTracesForActiveNote() {
+  state.traces = state.traces.filter((trace) => trace.noteId !== activeTraceNoteId);
+  persistState();
+  $("#trace-dialog").close();
+  renderAll();
+  showToast("已移出月历，原文仍然保留。");
+}
+
+function openTrackerManager(month) {
+  managerMonth = month;
+  managerIds = [...getMonthFocusIds(month)];
+  renderTrackerManager();
+  $("#tracker-dialog").showModal();
+}
+
+function renderTrackerManager() {
+  $("#tracker-dialog-title").textContent = `${formatMonth(managerMonth)} · 本月留意`;
+  $("#active-tracker-list").innerHTML = managerIds.length ? managerIds.map((id, index) => {
+    const tracker = trackerById(id);
+    return `
+      <div class="active-tracker-row ${toneClass(tracker)}" data-active-tracker="${escapeAttr(id)}">
+        <strong>${escapeHtml(tracker?.name || id)}</strong>
+        <button class="mini-icon-button" type="button" data-manager-action="up" aria-label="上移 ${escapeAttr(tracker?.name || id)}" title="上移" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button class="mini-icon-button" type="button" data-manager-action="down" aria-label="下移 ${escapeAttr(tracker?.name || id)}" title="下移" ${index === managerIds.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="mini-icon-button remove" type="button" data-manager-action="remove" aria-label="移除 ${escapeAttr(tracker?.name || id)}" title="移除">×</button>
+      </div>`;
+  }).join("") : `<p class="empty-copy">本月还没有放在前面的项目。</p>`;
+
+  const available = state.trackers.filter((tracker) => !managerIds.includes(tracker.id));
+  const grouped = new Map(GROUP_ORDER.map((group) => [group, []]));
+  available.forEach((tracker) => {
+    const group = grouped.has(tracker.group) ? tracker.group : "自定义";
+    grouped.get(group).push(tracker);
+  });
+  $("#tracker-library").innerHTML = [...grouped.entries()].filter(([, trackers]) => trackers.length).map(([group, trackers]) => `
+    <div class="library-group">
+      <strong>${escapeHtml(group)}</strong>
+      <div class="library-items">${trackers.map((tracker) => `<button class="library-item ${toneClass(tracker)}" type="button" data-library-add="${escapeAttr(tracker.id)}">${escapeHtml(tracker.name)}</button>`).join("")}</div>
+    </div>`).join("");
+}
+
+function commitManagerIds() {
+  setMonthFocusIds(managerMonth, managerIds);
+  renderAll();
+}
+
+function addManagerTracker(id) {
+  if (managerIds.includes(id)) return;
+  if (managerIds.length >= 8) {
+    showToast("本月留意最多放 8 项。先移除一项再添加。", true);
+    return;
+  }
+  managerIds.push(id);
+  commitManagerIds();
+  renderTrackerManager();
+}
+
+function createCustomTracker(event) {
   event.preventDefault();
-  const title = $("#leisure-title").value.trim();
-  if (!title) return;
-  const old = editingLeisureId ? state.leisure_items.find((item) => item.id === editingLeisureId) : null;
-  const item = {
-    id: old?.id || uid("leisure"), title, kind: $("#leisure-kind").value, status: $("#leisure-status").value,
-    progress: $("#leisure-progress").value.trim(), context: $("#leisure-context").value, feeling: $("#leisure-feeling").value,
-    note: $("#leisure-note").value.trim(), created_at: old?.created_at || new Date().toISOString(), updated_at: new Date().toISOString(), metadata: old?.metadata || { source: "app" },
+  if (managerIds.length >= 8) {
+    showToast("本月留意最多放 8 项。先移除一项再新建。", true);
+    return;
+  }
+  const name = $("#new-tracker-name").value.trim();
+  const mode = $("#new-tracker-mode").value;
+  const unit = $("#new-tracker-unit").value.trim();
+  if (!name) return;
+  const duplicate = state.trackers.find((tracker) => tracker.name === name);
+  if (duplicate) {
+    addManagerTracker(duplicate.id);
+    showToast("已把同名项目加入本月。");
+    return;
+  }
+  const tracker = {
+    id: makeId("custom"),
+    name,
+    short: [...name][0] || "记",
+    group: "自定义",
+    preset: "generic",
+    mode,
+    unit: mode === "quantity" ? unit : "",
+    builtIn: false
   };
-  if (old) Object.assign(old, item); else state.leisure_items.push(item);
-  await persistState(); resetLeisureForm(); renderLeisure(); showToast(old ? "闲暇条目已更新。" : "已放进闲暇清单。");
+  state.trackers.push(tracker);
+  managerIds.push(tracker.id);
+  commitManagerIds();
+  renderTrackerManager();
+  $("#new-tracker-form").reset();
+  $("#new-tracker-unit-label").hidden = true;
+  showToast(`已加入“${name}”。`);
 }
 
-function resetLeisureForm() {
-  editingLeisureId = null; $("#leisure-form").reset(); populateLeisureSelects();
-  $("#leisure-form-title").textContent = "放进闲暇清单"; $("#leisure-submit").textContent = "保存闲暇条目"; $("#cancel-leisure-edit").hidden = true;
-}
-
-function editLeisure(id) {
-  const item = state.leisure_items.find((value) => value.id === id); if (!item) return;
-  editingLeisureId = id; $("#leisure-title").value = item.title; $("#leisure-kind").value = item.kind; $("#leisure-status").value = item.status;
-  $("#leisure-progress").value = item.progress; $("#leisure-context").value = item.context; $("#leisure-feeling").value = item.feeling; $("#leisure-note").value = item.note;
-  $("#leisure-form-title").textContent = "编辑闲暇条目"; $("#leisure-submit").textContent = "更新闲暇条目"; $("#cancel-leisure-edit").hidden = false;
-  $("#leisure-title").focus();
-}
-
-async function handleLeisureClick(event) {
-  const card = event.target.closest("[data-leisure-id]"); if (!card) return;
-  const id = card.dataset.leisureId;
-  if (event.target.closest("[data-edit-leisure]")) editLeisure(id);
-  if (event.target.closest("[data-delete-leisure]")) {
-    if (!window.confirm("删除这个闲暇条目？历史日记不会被删除。")) return;
-    state.leisure_items = state.leisure_items.filter((item) => item.id !== id); await persistState(); renderLeisure();
-  }
-  if (event.target.closest("[data-log-leisure]")) {
-    const log = ensureLog(todayKey()); const detail = log.confirmed_details.leisure || { items: [] };
-    detail.items = [...new Set([...(detail.items || []), id])]; log.confirmed_details.leisure = detail;
-    await persistState(); showToast("已记到今天，不会改变闲暇清单状态。");
+function switchView(view, options = {}) {
+  currentView = view === "month" ? "month" : "today";
+  $$(".app-view").forEach((section) => {
+    const active = section.dataset.view === currentView;
+    section.classList.toggle("active", active);
+    section.hidden = !active;
+  });
+  $$(".view-tab").forEach((button) => {
+    const active = button.dataset.viewTarget === currentView;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  if (currentView === "today") {
+    renderToday();
+    if (options.scrollToEnd) requestAnimationFrame(() => $("#note-form").scrollIntoView({ block: "end" }));
+  } else {
+    renderMonth();
+    if (options.scrollTop !== false) window.scrollTo({ top: 0, behavior: "auto" });
   }
 }
 
-function showBoredSuggestions() {
-  const active = state.leisure_items.filter((item) => ["want", "watching", "paused"].includes(item.status)).sort((a, b) => leisureScore(b) - leisureScore(a)).slice(0, 3);
-  const box = $("#bored-result"); box.hidden = false;
-  box.innerHTML = active.length ? `<strong>现在可以继续：</strong>${active.map((item) => `<span>${escapeHtml(item.title)} · ${leisureOptions.kind[item.kind]}</span>`).join("")}` : "清单里还没有可继续的内容。先放两三项低成本选择就好。";
+function resetComposer() {
+  editingNoteId = null;
+  $("#note-input").value = state.drafts[activeDate] || "";
+  $("#save-note").textContent = "保存";
+  $("#cancel-edit").hidden = true;
+  autoResize($("#note-input"));
 }
 
-function leisureScore(item) {
-  return (item.status === "watching" ? 5 : item.status === "want" ? 3 : 1) + (item.context === "bored" ? 3 : 0) + (["nourishing", "company"].includes(item.feeling) ? 2 : 0) - (item.feeling === "draining" ? 3 : 0);
-}
-
-function lastDates(count) {
-  const base = dateFromKey(todayKey()); const dates = [];
-  for (let index = count - 1; index >= 0; index -= 1) { const date = new Date(base); date.setDate(base.getDate() - index); dates.push(todayKey(date)); }
-  return dates;
-}
-
-function renderReview() {
-  const dates = lastDates(7); const logs = dates.map((date) => state.daily_logs_by_date[date]).filter(Boolean); const cards = [];
-  const recorded = logs.filter(hasLogContent);
-  cards.push(reviewCard("记录概况", [`最近 7 天记录了 ${recorded.length} 天。`, `完成 to-dos ${recorded.reduce((sum, log) => sum + (log.todos || []).filter((todo) => todo.done).length, 0)} 项。`]));
-  cards.push(reviewCard("睡眠", sleepReview(logs)));
-  cards.push(reviewCard("身体与梦境", sectionReview(logs, ["身体", "身体状态", "梦境"])));
-  cards.push(reviewCard("庶务管理", choresReview(logs)));
-  cards.push(reviewCard("运动", movementReview(logs)));
-  cards.push(reviewCard("灵修", spiritualReview(logs)));
-  cards.push(reviewCard("内在与能量", sectionReview(logs, ["内在与能量", "清醒时间"])));
-  cards.push(reviewCard("关系", sectionReview(logs, ["关系"])));
-  cards.push(reviewCard("创造与灵感", sectionReview(logs, ["创造", "灵感"])));
-  cards.push(reviewCard("闲暇", leisureReview(logs)));
-  cards.push(reviewCard("下周可以轻轻尝试", suggestActions(logs)));
-  $("#review-content").innerHTML = cards.join("");
-}
-
-function reviewCard(title, lines) {
-  const clean = lines.filter(Boolean);
-  return `<article class="review-card"><h2>${title}</h2>${clean.length ? `<ul>${clean.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : `<p>这一项暂时没有太多内容。</p>`}</article>`;
-}
-
-function sleepReview(logs) {
-  const values = logs.map((log) => log.confirmed_details?.sleep).filter(detailHasContent);
-  if (!values.length) return ["本周还没有睡眠记录，可以先继续轻量观察。"];
-  const hours = values.map((v) => Number(v.metrics?.sleepHours)).filter(Boolean); const naps = values.map((v) => Number(v.metrics?.napMinutes)).filter(Boolean); const recovery = values.map((v) => Number(v.metrics?.sleepRecovery)).filter(Boolean);
-  const tags = countTags(values); const signals = ["入睡困难", "躺下但没睡意", "夜醒", "早醒", "环境噪音", "鸟叫", "身体不适"].filter((tag) => tags[tag]).map((tag) => `${tag} ${tags[tag]} 次`);
-  return [`记录睡眠 ${values.length} 天。`, hours.length ? `平均睡眠时长约 ${(hours.reduce((a, b) => a + b, 0) / hours.length).toFixed(1)} 小时。` : "", naps.length ? `午睡/补觉 ${naps.length} 次，共 ${naps.reduce((a, b) => a + b, 0)} 分钟。` : "", recovery.length ? `平均恢复感 ${(recovery.reduce((a, b) => a + b, 0) / recovery.length).toFixed(1)}/5。` : "", signals.length ? `出现：${signals.join("，")}。` : ""];
-}
-
-function movementReview(logs) {
-  const values = logs.map((log) => log.confirmed_details?.movement).filter(detailHasContent); const tags = countTags(values);
-  const minutes = values.reduce((sum, v) => sum + Number(v.metrics?.movementMinutes || 0), 0); const km = values.reduce((sum, v) => sum + Number(v.metrics?.walkKm || 0), 0);
-  return [values.length ? `运动记录 ${values.length} 天。` : "本周还没有结构化运动记录。", minutes ? `总运动时长约 ${minutes} 分钟。` : "", km ? `散步/走路约 ${km.toFixed(1)} 公里。` : "", Object.keys(tags).length ? `项目：${formatCounts(tags)}。` : ""];
-}
-
-function choresReview(logs) {
-  const values = logs.map((log) => log.confirmed_details?.chores).filter(detailHasContent); const tags = countTags(values);
-  return [Object.keys(tags).length ? formatCounts(tags) : "洗澡、洗衣、排便和自我按摩还没有形成可统计记录。"];
-}
-
-function spiritualReview(logs) {
-  const values = logs.map((log) => log.confirmed_details?.spiritual).filter(detailHasContent); const tags = countTags(values);
-  return [`灵修相关记录 ${values.length} 天。`, Object.keys(tags).length ? `实践：${formatCounts(tags)}。` : "", ...sectionReview(logs, ["灵修"], 2)];
-}
-
-function leisureReview(logs) {
-  const ids = new Set(logs.flatMap((log) => log.confirmed_details?.leisure?.items || [])); const active = state.leisure_items.filter((item) => ["want", "watching", "paused"].includes(item.status));
-  return [ids.size ? `本周记到当天的闲暇内容 ${ids.size} 个。` : "本周还没有把闲暇内容记到具体日期。", active.length ? `清单里有 ${active.length} 个可继续的选择。` : "清单里暂时没有可继续的内容。", ...active.slice(0, 3).map((item) => `${item.title}：${leisureOptions.status[item.status]}${item.progress ? `，${item.progress}` : ""}`)];
-}
-
-function sectionReview(logs, titles, limit = 3) {
-  const found = [];
-  for (const log of logs) for (const section of log.legacy_sections || []) if (titles.includes(section.title) && section.content) found.push(`${log.date}：${section.content.replace(/\s+/g, " ").slice(0, 100)}`);
-  for (const log of logs) for (const fact of log.confirmed_details?.ai_facts || []) if (titles.includes(fact.label) || titles.includes(fact.category)) found.push(`${log.date}：${fact.value.slice(0, 100)}`);
-  return found.slice(-limit);
-}
-
-function countTags(values) {
-  const counts = {}; for (const value of values) for (const tag of value.tags || []) counts[tag] = (counts[tag] || 0) + 1; return counts;
-}
-
-function formatCounts(counts) {
-  return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name} ${count} 次`).join("，");
-}
-
-function suggestActions(logs) {
-  const actions = [];
-  if (logs.map((log) => log.confirmed_details?.sleep).filter(detailHasContent).length < 3) actions.push("给睡眠留一个很小的入口，只记时长或恢复感也可以。");
-  if (logs.map((log) => log.confirmed_details?.movement).filter(detailHasContent).length < 2) actions.push("给身体十分钟低门槛活动，不需要完整训练。");
-  if (!state.leisure_items.some((item) => ["want", "watching"].includes(item.status))) actions.push("给无聊时刻留两三个能继续的内容选择。");
-  if (!actions.length) actions.push("继续保持现在这种轻量记录，不需要把生活写满。");
-  return actions.slice(0, 3);
-}
-
-function markdownForDate(date) {
-  const log = state.daily_logs_by_date[date]; if (!log) return "";
-  const parts = [`# ${date}`];
-  if (log.todos?.length) parts.push(`## to-dos\n${log.todos.map((todo) => `- [${todo.done ? "x" : " "}] ${todo.text}`).join("\n")}`);
-  if (log.raw_input?.trim()) parts.push(`## 原始记录\n${log.raw_input.trim()}`);
-  const details = [];
-  for (const [type, value] of Object.entries(log.confirmed_details || {})) {
-    if (type === "ai_facts") continue;
-    const lines = [];
-    if (value.tags?.length) lines.push(`选项：${value.tags.join("，")}`);
-    if (formatMetrics(value.metrics || {})) lines.push(`数据：${formatMetrics(value.metrics)}`);
-    for (const [key, text] of Object.entries(value.extras || {})) if (text) lines.push(`${key === "bedtimeActivity" ? "睡前活动" : key === "sleepFactors" ? "影响睡眠的因素" : key}：${text}`);
-    if (value.note) lines.push(value.note);
-    if (value.items?.length) lines.push(`闲暇条目：${value.items.map((id) => state.leisure_items.find((item) => item.id === id)?.title).filter(Boolean).join("，")}`);
-    if (lines.length) details.push(`### ${detailLabels[type] || type}\n${lines.join("\n")}`);
-  }
-  if (details.length) parts.push(`## 已确认详情\n${details.join("\n\n")}`);
-  if (log.ai_organized) parts.push(`## AI 整理\n${log.ai_organized.summary || ""}\n\n${log.ai_organized.reflection || ""}`.trim());
-  if (log.metadata?.source_markdown) parts.push(`## 原始导入来源\n${log.metadata.source_markdown}`);
-  return parts.join("\n\n");
-}
-
-function markdownForLeisure() {
-  if (!state.leisure_items.length) return "";
-  return ["# 闲暇清单", ...state.leisure_items.map((item) => `## ${item.title}\n类型：${leisureOptions.kind[item.kind] || "其他"}\n状态：${leisureOptions.status[item.status] || "稍后"}\n进度：${item.progress || "未填写"}\n适合：${leisureOptions.context[item.context] || "无聊时"}\n感受：${leisureOptions.feeling[item.feeling] || "一般"}\n${item.note || ""}`.trim())].join("\n\n");
-}
-
-function exportAllJson() {
-  download(`life-log-backup-${todayKey()}.json`, JSON.stringify({ exported_at: new Date().toISOString(), ...state }, null, 2), "application/json;charset=utf-8");
-  showToast("完整备份已导出，app 内记录仍然保留。");
-}
-
-function exportAllMarkdown() {
-  const content = [...recordedDates()].reverse().map(markdownForDate).filter(Boolean); const leisure = markdownForLeisure(); if (leisure) content.push(leisure);
-  download(`life-log-${todayKey()}.md`, content.join("\n\n---\n\n"), "text/markdown;charset=utf-8");
-  showToast("Markdown 已导出，app 内记录没有变化。");
-}
-
-function exportDate(date) {
-  download(`life-log-${date}.md`, markdownForDate(date), "text/markdown;charset=utf-8");
-}
-
-async function importBackup(file) {
-  if (!file) return;
-  try {
-    const incoming = JSON.parse(await file.text());
-    if (!incoming.daily_logs_by_date || !Array.isArray(incoming.leisure_items)) throw new Error("这不是可识别的 Life Log 备份");
-    if (!window.confirm("导入会合并记录；同一天已有内容时，保留更新时间较新的版本。继续吗？")) return;
-    for (const [date, log] of Object.entries(incoming.daily_logs_by_date)) {
-      const current = state.daily_logs_by_date[date];
-      if (!current || new Date(log.metadata?.updated_at || 0) > new Date(current.metadata?.updated_at || 0)) state.daily_logs_by_date[date] = log;
-    }
-    const map = new Map(state.leisure_items.map((item) => [item.id, item]));
-    for (const item of incoming.leisure_items) if (item?.id) map.set(item.id, normalizeLeisure(item));
-    state.leisure_items = [...map.values()];
-    await persistState(); renderAll(); showToast("备份已合并，原有较新记录得到保留。");
-  } catch (error) { showToast(error.message || "导入失败"); }
-  $("#import-file").value = "";
-}
-
-function renderSettings() {
-  $("#ai-api-url").value = state.settings.ai_api_url || "";
-  $("#ai-access-code").value = state.settings.ai_access_code || "";
-  renderStorageStatus();
-}
-
-function renderStorageStatus() {
-  const target = $("#storage-status"); if (!target) return;
-  target.textContent = `当前保存 ${recordedDates().length} 天记录、${state.leisure_items.length} 个闲暇条目。${db ? "使用 IndexedDB 持久存储。" : "当前使用本地备用存储。"}`;
-}
-
-async function saveAiSettings(event) {
+function saveNote(event) {
   event.preventDefault();
-  state.settings.ai_api_url = $("#ai-api-url").value.trim();
-  state.settings.ai_access_code = $("#ai-access-code").value;
-  await persistState(); $("#ai-settings-status").textContent = "AI 设置已保存在这台设备；OpenAI API Key 不在前端。"; showToast("AI 设置已保存。");
+  const text = $("#note-input").value.trim();
+  if (!text) {
+    showToast("先留下一点内容。", true);
+    $("#note-input").focus();
+    return;
+  }
+  const wasEditing = Boolean(editingNoteId);
+  if (wasEditing) {
+    const note = noteById(editingNoteId);
+    if (note) {
+      note.text = text;
+      note.updatedAt = new Date().toISOString();
+    }
+  } else {
+    state.notes.push({ id: makeId("note"), date: activeDate, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), text });
+  }
+  delete state.drafts[activeDate];
+  persistState();
+  resetComposer();
+  renderAll();
+  requestAnimationFrame(() => $("#note-form").scrollIntoView({ block: "end", behavior: "smooth" }));
+  showToast(wasEditing ? "记录已更新。" : "记录已保存。需要时再放进月历。");
 }
 
-function switchView(viewId, options = {}) {
-  activeView = viewId;
-  if (viewId === "today-view" && !options.keepDate) currentDate = todayKey();
-  $$(".app-view").forEach((view) => view.classList.toggle("active", view.id === viewId));
-  $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.viewTarget === viewId));
-  if (viewId === "today-view") renderToday();
-  if (viewId === "records-view") { $("#record-list").hidden = false; renderRecords(); }
-  if (viewId === "leisure-view") renderLeisure();
-  if (viewId === "review-view") renderReview();
-  if (viewId === "backup-view") renderSettings();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+function editNote(noteId) {
+  const note = noteById(noteId);
+  if (!note) return;
+  editingNoteId = noteId;
+  $("#note-input").value = note.text;
+  $("#save-note").textContent = "更新";
+  $("#cancel-edit").hidden = false;
+  autoResize($("#note-input"));
+  $("#note-form").scrollIntoView({ block: "end", behavior: "smooth" });
+  $("#note-input").focus();
 }
 
-function renderDuration() {
-  const minutes = Math.round(Number(state.durations_by_date[currentDate] || 0) / 60000);
-  $("#duration-note").textContent = `今日在这里停留约 ${minutes} 分钟`;
-}
-
-function trackDuration() {
-  const now = Date.now(); const active = document.visibilityState === "visible" && activeView === "today-view" && now - lastInteractionAt < 120000;
-  if (active) state.durations_by_date[currentDate] = Number(state.durations_by_date[currentDate] || 0) + Math.min(now - lastDurationTick, 30000);
-  lastDurationTick = now; renderDuration(); if (active) persistState();
-}
-
-function checkDateRoll() {
-  const today = todayKey(); if (today === lastToday) return;
-  const previous = lastToday; lastToday = today;
-  if (activeView === "today-view" && currentDate === previous && !$("#raw-input").value.trim()) { currentDate = today; renderToday(); showToast("新的一天已经开始，已自动切到今天。"); }
+function deleteNote(noteId) {
+  const note = noteById(noteId);
+  if (!note || !window.confirm("删除这条原文及其月历痕迹？删除后只能从备份中恢复。")) return;
+  state.notes = state.notes.filter((item) => item.id !== noteId);
+  state.traces = state.traces.filter((trace) => trace.noteId !== noteId);
+  if (editingNoteId === noteId) resetComposer();
+  persistState();
+  renderAll();
+  showToast("记录已删除。");
 }
 
 function renderAll() {
-  renderToday(); renderRecords(); renderLeisure(); renderReview(); renderSettings();
+  renderToday();
+  renderMonth();
+}
+
+function autoResize(textarea) {
+  textarea.style.height = "auto";
+  textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 132), 360)}px`;
+}
+
+function showToast(message, urgent = false) {
+  const toast = $("#toast");
+  toast.textContent = message;
+  toast.hidden = false;
+  toast.style.borderColor = urgent ? "#c69b96" : "";
+  toast.style.color = urgent ? "#78362f" : "";
+  toast.style.background = urgent ? "#fbefed" : "";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 3200);
+}
+
+function monthSummaryRows(key) {
+  const grouped = new Map();
+  state.traces.filter((trace) => monthKey(trace.date) === key).forEach((trace) => {
+    if (!grouped.has(trace.trackerId)) grouped.set(trace.trackerId, []);
+    grouped.get(trace.trackerId).push(trace);
+  });
+  return [...grouped.entries()].map(([id, traces]) => ({ tracker: trackerById(id), text: summarizeTracker(trackerById(id), traces) }));
+}
+
+function buildMonthMarkdown(key) {
+  const lines = [`# Life Log · ${formatMonth(key)}`, "", "> 基于已经放进月历的记录。空白表示没有记录，不代表没有发生。", "", "## 本月留意", ""];
+  const focusNames = getMonthFocusIds(key).map((id) => trackerById(id)?.name).filter(Boolean);
+  lines.push(focusNames.length ? focusNames.join(" · ") : "未设定", "", "## 按日期", "");
+  const dates = [...new Set([
+    ...state.notes.filter((note) => monthKey(note.date) === key).map((note) => note.date),
+    ...state.traces.filter((trace) => monthKey(trace.date) === key).map((trace) => trace.date)
+  ])].sort();
+  if (!dates.length) lines.push("这个月还没有记录。", "");
+  dates.forEach((date) => {
+    lines.push(`### ${formatDay(date, true)}`, "");
+    notesForDate(date).forEach((note) => {
+      lines.push(`- ${noteTimeLabel(note)} ${note.text.replace(/\n/g, " ")}`);
+      tracesForNote(note.id).forEach((trace) => lines.push(`  - ${trackerById(trace.trackerId)?.name || "记录"}：${traceDetail(trace)}`));
+    });
+    lines.push("");
+  });
+  lines.push("## 月度小结", "");
+  const rows = monthSummaryRows(key);
+  if (!rows.length) lines.push("还没有可汇总的月历痕迹。", "");
+  rows.forEach(({ tracker, text }) => lines.push(`- **${tracker?.name || "记录"}**：${text}`));
+  lines.push("");
+  return lines.join("\n");
+}
+
+function downloadFile(content, type, filename) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadMonth() {
+  const key = currentView === "month" ? calendarMonth : monthKey(activeDate);
+  downloadFile("﻿" + buildMonthMarkdown(key), "text/markdown;charset=utf-8", "life-log-" + key + ".md");
+  showToast(formatMonth(key) + "已导出。");
+}
+
+function fullBackupPayload() {
+  return {
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: JSON.parse(JSON.stringify(state))
+  };
+}
+
+function downloadFullBackup() {
+  const exportedAt = new Date().toISOString();
+  state.meta.lastBackupAt = exportedAt;
+  persistState("已完成本机保存");
+  const payload = fullBackupPayload();
+  payload.exportedAt = exportedAt;
+  payload.data.meta.lastBackupAt = exportedAt;
+  downloadFile(JSON.stringify(payload, null, 2), "application/json;charset=utf-8", "life-log-backup-" + todayKey() + ".json");
+  renderBackupStatus();
+  showToast("全部记录已备份。");
+}
+
+function displayDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
+function renderBackupStatus() {
+  const status = $("#storage-status");
+  if (!status) return;
+  status.classList.toggle("is-limited", !storagePersistence.persisted);
+  $("#storage-status-title").textContent = storagePersistence.persisted ? "已启用更稳定的本机存储" : "本机保存已启用";
+  $("#storage-status-copy").textContent = storagePersistence.persisted
+    ? "刷新、离线或从主屏幕重开后会继续读取这些记录。"
+    : "系统未确认持久存储，建议定期导出完整备份。";
+  const lastBackup = displayDateTime(state.meta?.lastBackupAt);
+  $("#last-backup-copy").textContent = lastBackup
+    ? "最近一次完整备份：" + lastBackup
+    : "尚未在这台设备上导出完整备份。";
+}
+
+async function requestPersistentStorage() {
+  const storage = navigator.storage;
+  storagePersistence.supported = Boolean(storage?.persisted);
+  if (!storage?.persisted) {
+    renderBackupStatus();
+    return;
+  }
+  try {
+    let persisted = await storage.persisted();
+    if (!persisted && storage.persist) persisted = await storage.persist();
+    storagePersistence.persisted = Boolean(persisted);
+  } catch {
+    storagePersistence.persisted = false;
+  }
+  renderBackupStatus();
+}
+
+function openBackupDialog() {
+  renderBackupStatus();
+  $("#backup-dialog").showModal();
+}
+
+function updatedMoment(item) {
+  const value = item?.updatedAt || item?.createdAt || "";
+  const moment = Date.parse(value);
+  return Number.isFinite(moment) ? moment : 0;
+}
+
+function mergeItems(localItems, importedItems) {
+  const merged = new Map();
+  (Array.isArray(importedItems) ? importedItems : []).forEach((item) => {
+    if (item?.id) merged.set(item.id, item);
+  });
+  (Array.isArray(localItems) ? localItems : []).forEach((item) => {
+    if (!item?.id) return;
+    const existing = merged.get(item.id);
+    if (!existing || updatedMoment(item) >= updatedMoment(existing)) merged.set(item.id, item);
+  });
+  return [...merged.values()];
+}
+
+function mergeImportedState(localValue, importedValue) {
+  const local = normalizeState(localValue);
+  const imported = normalizeState(importedValue);
+  const merged = normalizeState({
+    version: Math.max(local.version || 1, imported.version || 1),
+    notes: mergeItems(local.notes, imported.notes),
+    traces: mergeItems(local.traces, imported.traces),
+    trackers: mergeItems(local.trackers, imported.trackers),
+    monthPreferences: { ...imported.monthPreferences, ...local.monthPreferences },
+    drafts: { ...imported.drafts, ...local.drafts },
+    meta: {
+      ...imported.meta,
+      ...local.meta,
+      createdAt: local.meta?.createdAt || imported.meta?.createdAt,
+      lastImportAt: new Date().toISOString()
+    }
+  });
+  const noteIds = new Set(merged.notes.map((note) => note.id));
+  const trackerIds = new Set(merged.trackers.map((tracker) => tracker.id));
+  merged.traces = merged.traces.filter((trace) => noteIds.has(trace.noteId) && trackerIds.has(trace.trackerId));
+  return merged;
+}
+
+async function importBackupFile(file) {
+  if (!file) return;
+  try {
+    const parsed = JSON.parse(await file.text());
+    if (parsed?.format !== BACKUP_FORMAT || parsed?.version !== BACKUP_VERSION || !parsed?.data) {
+      throw new Error("无法识别这个备份文件。");
+    }
+    const incomingNotes = Array.isArray(parsed.data.notes) ? parsed.data.notes.length : 0;
+    state = mergeImportedState(state, parsed.data);
+    persistState("导入后已保存");
+    await storageWriteQueue;
+    renderAll();
+    renderBackupStatus();
+    $("#backup-dialog").close();
+    showToast("已导入并合并 " + incomingNotes + " 条原始记录。");
+  } catch (error) {
+    showToast(error?.message || "备份导入失败。", true);
+  } finally {
+    $("#backup-file-input").value = "";
+  }
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  const register = () => navigator.serviceWorker.register("./sw.js?v=20260719-formal").catch(() => {});
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
+}
+
+function checkDateChange() {
+  const current = todayKey();
+  if (current === lastToday) return;
+  const wasOnToday = activeDate === lastToday;
+  lastToday = current;
+  if (wasOnToday) activeDate = current;
+  if (calendarMonth === monthKey(addDays(current, -1))) {
+    calendarMonth = monthKey(current);
+    selectedCalendarDate = current;
+  }
+  renderAll();
+  showToast("新的一天已经翻开。");
 }
 
 function bindEvents() {
-  document.addEventListener("click", () => { lastInteractionAt = Date.now(); });
-  document.addEventListener("input", () => { lastInteractionAt = Date.now(); });
-  $$('[data-view-target]').forEach((button) => button.addEventListener("click", () => switchView(button.dataset.viewTarget)));
-  $("#return-today").addEventListener("click", () => { currentDate = todayKey(); renderToday(); });
-  $("#raw-input").addEventListener("input", scheduleRawSave);
-  $("#save-button").addEventListener("click", saveNow);
-  $("#organize-button").addEventListener("click", organizeToday);
-  $("#confirm-button").addEventListener("click", confirmAi);
-  $("#adjust-button").addEventListener("click", adjustAi);
-  $("#todo-form").addEventListener("submit", addTodo);
-  $("#todo-list").addEventListener("click", handleTodoClick);
-  $("#todo-list").addEventListener("change", handleTodoClick);
-  $("#detail-stack").addEventListener("input", saveDetailFromEvent);
-  $("#detail-stack").addEventListener("change", saveDetailFromEvent);
-  $("#detail-stack").addEventListener("click", (event) => { if (event.target.closest("#save-daily-leisure")) saveDailyLeisure(); });
-  $("#detail-stack").addEventListener("toggle", (event) => {
-    const panel = event.target.closest(".detail-panel"); if (!panel?.open) return;
-    $$(".detail-panel").forEach((other) => { if (other !== panel) other.open = false; });
-  }, true);
-  $("#record-month").addEventListener("change", (event) => { selectedMonth = event.target.value; renderRecords(); });
-  $("#show-all-records").addEventListener("click", () => { selectedMonth = ""; renderRecords(); });
-  $("#record-list").addEventListener("click", (event) => { const row = event.target.closest("[data-open-record]"); if (row) renderRecordDetail(row.dataset.openRecord); });
-  $("#record-detail").addEventListener("click", (event) => {
-    if (event.target.closest("[data-close-record]")) { $("#record-detail").hidden = true; $("#record-list").hidden = false; }
-    const edit = event.target.closest("[data-edit-date]"); if (edit) { currentDate = edit.dataset.editDate; switchView("today-view", { keepDate: true }); }
-    const exportButton = event.target.closest("[data-export-date]"); if (exportButton) exportDate(exportButton.dataset.exportDate);
+  $$("[data-view-target]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.viewTarget, { scrollToEnd: button.dataset.viewTarget === "today" })));
+  $("#brand-today").addEventListener("click", () => {
+    activeDate = todayKey();
+    resetComposer();
+    switchView("today", { scrollToEnd: true });
   });
-  $("#export-all-from-records").addEventListener("click", exportAllMarkdown);
-  $("#leisure-form").addEventListener("submit", submitLeisure);
-  $("#cancel-leisure-edit").addEventListener("click", resetLeisureForm);
-  $("#leisure-list").addEventListener("click", handleLeisureClick);
-  $("#bored-button").addEventListener("click", showBoredSuggestions);
-  $("#export-json").addEventListener("click", exportAllJson);
-  $("#export-md").addEventListener("click", exportAllMarkdown);
-  $("#import-file").addEventListener("change", (event) => importBackup(event.target.files[0]));
-  $("#ai-settings-form").addEventListener("submit", saveAiSettings);
-  $("#history-unlock-form").addEventListener("submit", unlockHistory);
-  $("#history-unlock-later").addEventListener("click", () => $("#history-unlock").close());
-  document.addEventListener("visibilitychange", () => { trackDuration(); if (document.visibilityState === "visible") checkDateRoll(); });
-  window.addEventListener("focus", checkDateRoll);
-}
-
-function bytesFromBase64(value) {
-  const binary = atob(value);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
-async function decryptHistorySeed(passphrase) {
-  if (!window.crypto?.subtle) throw new Error("当前浏览器不支持安全解锁，请使用最新版 Safari。" );
-  const response = await fetch(HISTORY_SEED_URL, { cache: "no-store" });
-  if (!response.ok) throw new Error("历史记录包暂时没有加载成功，请刷新后重试。" );
-  const envelope = await response.json();
-  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
-  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: bytesFromBase64(envelope.salt), iterations: envelope.iterations }, material, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-  const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytesFromBase64(envelope.iv), additionalData: HISTORY_AAD }, key, bytesFromBase64(envelope.ciphertext));
-  return JSON.parse(new TextDecoder().decode(clear));
-}
-
-function mergeHistorySeed(incoming) {
-  if (!incoming?.daily_logs_by_date || !Array.isArray(incoming.leisure_items)) throw new Error("历史记录包格式不正确。" );
-  for (const [date, log] of Object.entries(incoming.daily_logs_by_date)) {
-    const current = state.daily_logs_by_date[date];
-    if (!current || !hasLogContent(current)) state.daily_logs_by_date[date] = log;
-  }
-  const leisureById = new Map(incoming.leisure_items.map((item) => [item.id, normalizeLeisure(item)]));
-  for (const item of state.leisure_items) leisureById.set(item.id, item);
-  state.leisure_items = [...leisureById.values()];
-  if (!state.migrations.includes(HISTORY_SEED_ID)) state.migrations.push(HISTORY_SEED_ID);
-  if (!state.seed_ids.includes(HISTORY_SEED_ID)) state.seed_ids.push(HISTORY_SEED_ID);
-}
-
-async function unlockHistory(event) {
-  event.preventDefault();
-  const passphrase = $("#history-passphrase").value.trim();
-  const status = $("#history-unlock-status");
-  const submit = $("#history-unlock-submit");
-  if (!passphrase) { status.textContent = "请输入解锁口令。"; return; }
-  submit.disabled = true;
-  submit.textContent = "正在带回记录…";
-  status.textContent = "只在这台设备上解锁，请稍候。";
-  try {
-    const incoming = await decryptHistorySeed(passphrase);
-    mergeHistorySeed(incoming);
-    await persistState();
-    $("#history-passphrase").value = "";
-    $("#history-unlock").close();
-    renderAll();
-    switchView("records-view");
-    showToast("过去的记录已经回到 Life Log。" );
-  } catch (error) {
-    status.textContent = error?.name === "OperationError" ? "口令不正确，请检查大小写和连接符。" : (error.message || "解锁失败，请稍后重试。" );
-  } finally {
-    submit.disabled = false;
-    submit.textContent = "解锁并查看记录";
-  }
-}
-
-function offerHistoryUnlock() {
-  if (state.migrations.includes(HISTORY_SEED_ID)) return;
-  const dialog = $("#history-unlock");
-  if (!dialog?.showModal) return;
-  requestAnimationFrame(() => {
-    dialog.showModal();
-    $("#history-passphrase").focus({ preventScroll: true });
+  $("#return-today").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); switchView("today", { scrollToEnd: true }); });
+  $("#history-return").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); switchView("today", { scrollToEnd: true }); });
+  $("#note-form").addEventListener("submit", saveNote);
+  $("#note-input").addEventListener("input", (event) => {
+    autoResize(event.target);
+    if (editingNoteId) return;
+    state.drafts[activeDate] = event.target.value;
+    $("#save-state").textContent = "正在保存草稿…";
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => persistState("草稿已保存"), 300);
   });
-}
-function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((registration) => registration.update()).catch(() => {});
+  $("#cancel-edit").addEventListener("click", resetComposer);
+  $("#note-list").addEventListener("click", (event) => {
+    const noteElement = event.target.closest("[data-note-id]");
+    const action = event.target.closest("[data-note-action]")?.dataset.noteAction;
+    if (!noteElement || !action) return;
+    const noteId = noteElement.dataset.noteId;
+    if (action === "trace") openTraceDialog(noteId);
+    if (action === "edit") editNote(noteId);
+    if (action === "delete") deleteNote(noteId);
+  });
+
+  $("#trace-dialog").addEventListener("click", (event) => {
+    const choice = event.target.closest("[data-tracker-choice]");
+    if (!choice) return;
+    captureTraceDrafts();
+    const id = choice.dataset.trackerChoice;
+    if (selectedTraceTrackers.has(id)) selectedTraceTrackers.delete(id);
+    else selectedTraceTrackers.add(id);
+    renderTraceChoices();
+  });
+  $("#trace-form").addEventListener("submit", (event) => { event.preventDefault(); saveTracesForActiveNote(); });
+  $("#close-trace-dialog").addEventListener("click", () => $("#trace-dialog").close());
+  $("#remove-note-traces").addEventListener("click", removeTracesForActiveNote);
+  $("#toggle-more-trackers").addEventListener("click", () => {
+    const expanded = $("#toggle-more-trackers").getAttribute("aria-expanded") === "true";
+    $("#toggle-more-trackers").setAttribute("aria-expanded", String(!expanded));
+    $("#more-tracker-choices").hidden = expanded;
+  });
+
+  $("#previous-month").addEventListener("click", () => {
+    calendarMonth = shiftMonth(calendarMonth, -1);
+    selectedCalendarDate = firstDateOfMonth(calendarMonth);
+    renderMonth();
+  });
+  $("#next-month").addEventListener("click", () => {
+    calendarMonth = shiftMonth(calendarMonth, 1);
+    selectedCalendarDate = firstDateOfMonth(calendarMonth);
+    renderMonth();
+  });
+  $("#current-month").addEventListener("click", () => {
+    calendarMonth = monthKey(todayKey());
+    selectedCalendarDate = todayKey();
+    renderMonth();
+  });
+  $("#calendar-grid").addEventListener("click", (event) => {
+    const day = event.target.closest("[data-calendar-date]");
+    if (!day) return;
+    selectedCalendarDate = day.dataset.calendarDate;
+    if (monthKey(selectedCalendarDate) !== calendarMonth) calendarMonth = monthKey(selectedCalendarDate);
+    renderMonth();
+    if (window.innerWidth <= 720) requestAnimationFrame(() => $(".selected-day").scrollIntoView({ block: "start", behavior: "smooth" }));
+  });
+  $("#open-selected-day").addEventListener("click", () => {
+    activeDate = selectedCalendarDate;
+    resetComposer();
+    switchView("today", { scrollToEnd: true });
+  });
+
+  $("#manage-trackers-today").addEventListener("click", () => openTrackerManager(monthKey(activeDate)));
+  $("#manage-trackers-month").addEventListener("click", () => openTrackerManager(calendarMonth));
+  $("#close-tracker-dialog").addEventListener("click", () => $("#tracker-dialog").close());
+  $("#finish-tracker-management").addEventListener("click", () => $("#tracker-dialog").close());
+  $("#active-tracker-list").addEventListener("click", (event) => {
+    const row = event.target.closest("[data-active-tracker]");
+    const action = event.target.closest("[data-manager-action]")?.dataset.managerAction;
+    if (!row || !action) return;
+    const index = managerIds.indexOf(row.dataset.activeTracker);
+    if (index < 0) return;
+    if (action === "up" && index > 0) [managerIds[index - 1], managerIds[index]] = [managerIds[index], managerIds[index - 1]];
+    if (action === "down" && index < managerIds.length - 1) [managerIds[index + 1], managerIds[index]] = [managerIds[index], managerIds[index + 1]];
+    if (action === "remove") managerIds.splice(index, 1);
+    commitManagerIds();
+    renderTrackerManager();
+  });
+  $("#tracker-library").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-library-add]");
+    if (button) addManagerTracker(button.dataset.libraryAdd);
+  });
+  $("#new-tracker-mode").addEventListener("change", (event) => { $("#new-tracker-unit-label").hidden = event.target.value !== "quantity"; });
+  $("#new-tracker-form").addEventListener("submit", createCustomTracker);
+  $("#open-backup").addEventListener("click", openBackupDialog);
+  $("#close-backup-dialog").addEventListener("click", () => $("#backup-dialog").close());
+  $("#finish-backup").addEventListener("click", () => $("#backup-dialog").close());
+  $("#download-backup").addEventListener("click", downloadFullBackup);
+  $("#export-month").addEventListener("click", downloadMonth);
+  $("#choose-backup").addEventListener("click", () => $("#backup-file-input").click());
+  $("#backup-file-input").addEventListener("change", (event) => importBackupFile(event.target.files?.[0]));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkDateChange(); });
+  window.setInterval(checkDateChange, 60000);
 }
 
 async function init() {
-  state = await loadState();
-  migrateV4();
-  await persistState();
-  populateLeisureSelects();
+  await initializeState();
   bindEvents();
   renderAll();
-  offerHistoryUnlock();
+  switchView("today", { scrollToEnd: true });
   registerServiceWorker();
-  setInterval(trackDuration, 30000);
-  setInterval(checkDateRoll, 60000);
+  requestPersistentStorage();
 }
 
-init();
+init().catch(() => {
+  const main = document.querySelector("#main-content");
+  if (main) main.innerHTML = '<p class="empty-copy">暂时无法读取本机记录，请刷新页面再试一次。</p>';
+});
+
+
+
+
+
+
+
+
