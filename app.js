@@ -4,21 +4,25 @@ const DB_VERSION = 1;
 const DB_STORE = "state";
 const DB_KEY = "main";
 const BACKUP_FORMAT = "life-log-calendar-backup";
-const BACKUP_VERSION = 1;
-const DEFAULT_FOCUS = ["faith", "sleep", "body", "movement", "reading", "people"];
+const BACKUP_VERSION = 3;
+const STATE_VERSION = 2;
+const ARTIFACT_LINEAGE = "life-log-v2-evolved";
+const DEFAULT_FOCUS = ["faith", "sleep", "body", "care", "movement", "reading", "people", "completed", "dream"];
+const QUICK_TRACKER_IDS = ["faith", "sleep", "body", "care", "movement", "reading", "people", "completed", "dream"];
 
 const BUILT_IN_TRACKERS = [
-  { id: "faith", name: "灵修", short: "灵", group: "人与精神", preset: "generic", mode: "occurrence", tone: "sun", builtIn: true },
-  { id: "dream", name: "梦境", short: "梦", group: "人与精神", preset: "generic", mode: "occurrence", tone: "blue", builtIn: true },
+  { id: "faith", name: "灵修", short: "灵", group: "人与精神", preset: "faith", mode: "occurrence", tone: "sun", builtIn: true },
+  { id: "dream", name: "梦境", short: "梦", group: "人与精神", preset: "dream", mode: "occurrence", tone: "blue", builtIn: true },
   { id: "inner", name: "内在与能量", short: "内", group: "人与精神", preset: "generic", mode: "state", tone: "violet", builtIn: true },
   { id: "inspiration", name: "灵感", short: "感", group: "输入与创造", preset: "generic", mode: "occurrence", tone: "sun", builtIn: true },
   { id: "people", name: "社交", short: "社", group: "人与精神", preset: "people", mode: "occurrence", tone: "coral", builtIn: true },
   { id: "relationship", name: "关系", short: "系", group: "人与精神", preset: "generic", mode: "state", tone: "violet", builtIn: true },
   { id: "movement", name: "运动", short: "动", group: "身体与节律", preset: "movement", mode: "duration", tone: "mint", builtIn: true },
+  { id: "completed", name: "完成", short: "成", group: "生活事件", preset: "completed", mode: "occurrence", tone: "blue", builtIn: true },
   { id: "sleep", name: "睡眠", short: "睡", group: "身体与节律", preset: "sleep", mode: "duration", tone: "blue", builtIn: true },
   { id: "body", name: "身体", short: "身", group: "身体与节律", preset: "body", mode: "state", tone: "coral", builtIn: true },
   { id: "cycle", name: "经期", short: "经", group: "身体与节律", preset: "generic", mode: "state", tone: "violet", builtIn: true },
-  { id: "care", name: "生活照料", short: "照", group: "身体与节律", preset: "generic", mode: "occurrence", tone: "mint", builtIn: true },
+  { id: "care", name: "庶务", short: "务", group: "身体与节律", preset: "care", mode: "occurrence", tone: "mint", builtIn: true },
   { id: "reading", name: "阅读", short: "读", group: "输入与创造", preset: "reading", mode: "quantity", unit: "页", tone: "violet", builtIn: true },
   { id: "learning", name: "学习", short: "学", group: "输入与创造", preset: "generic", mode: "duration", tone: "blue", builtIn: true },
   { id: "creation", name: "创造", short: "创", group: "输入与创造", preset: "generic", mode: "occurrence", tone: "sun", builtIn: true },
@@ -42,9 +46,14 @@ let lastToday = activeDate;
 let calendarMonth = monthKey(activeDate);
 let selectedCalendarDate = activeDate;
 let editingNoteId = null;
+let editingMemoId = null;
+let activePrimingId = null;
 let activeTraceNoteId = null;
 let selectedTraceTrackers = new Set();
 let traceDrafts = {};
+let activeQuickTraceId = null;
+let selectedQuickTrackerId = null;
+let quickDraft = {};
 let managerMonth = calendarMonth;
 let managerIds = [];
 let toastTimer = null;
@@ -136,8 +145,10 @@ function escapeAttr(value) {
 function createEmptyState() {
   const now = new Date().toISOString();
   return {
-    version: 1,
+    version: STATE_VERSION,
     notes: [],
+    memos: [],
+    primings: [],
     traces: [],
     trackers: BUILT_IN_TRACKERS.map((tracker) => ({ ...tracker })),
     monthPreferences: { [monthKey(todayKey())]: [...DEFAULT_FOCUS] },
@@ -146,7 +157,8 @@ function createEmptyState() {
       createdAt: now,
       updatedAt: now,
       lastBackupAt: null,
-      lastImportAt: null
+      lastImportAt: null,
+      artifactLineage: ARTIFACT_LINEAGE
     }
   };
 }
@@ -163,8 +175,10 @@ function normalizeState(value) {
     monthPreferences[month] = ids.includes("faith") ? ["faith", ...ids.filter((id) => id !== "faith")] : ids;
   });
   return {
-    version: 1,
+    version: STATE_VERSION,
     notes: Array.isArray(source.notes) ? source.notes : [],
+    memos: Array.isArray(source.memos) ? source.memos : [],
+    primings: Array.isArray(source.primings) ? source.primings : [],
     traces: Array.isArray(source.traces) ? source.traces : [],
     trackers,
     monthPreferences,
@@ -173,7 +187,8 @@ function normalizeState(value) {
       createdAt: source.meta?.createdAt || source.seededAt || new Date().toISOString(),
       updatedAt: source.meta?.updatedAt || new Date().toISOString(),
       lastBackupAt: source.meta?.lastBackupAt || null,
-      lastImportAt: source.meta?.lastImportAt || null
+      lastImportAt: source.meta?.lastImportAt || null,
+      artifactLineage: source.meta?.artifactLineage || ARTIFACT_LINEAGE
     }
   };
 }
@@ -279,16 +294,24 @@ function getMonthFocusIds(key) {
     .sort()
     .reverse()[0];
   const inherited = previous ? state.monthPreferences[previous] : DEFAULT_FOCUS;
-  return inherited.filter((id) => trackerById(id)).slice(0, 8);
+  return inherited.filter((id) => trackerById(id)).slice(0, 9);
 }
 
 function setMonthFocusIds(key, ids) {
-  state.monthPreferences[key] = [...new Set(ids)].filter((id) => trackerById(id)).slice(0, 8);
+  state.monthPreferences[key] = [...new Set(ids)].filter((id) => trackerById(id)).slice(0, 9);
   persistState();
 }
 
 function notesForDate(date) {
   return state.notes.filter((note) => note.date === date).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function memosForDate(date) {
+  return state.memos.filter((memo) => memo.date === date).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function primingsForDate(date) {
+  return state.primings.filter((priming) => priming.date === date).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 }
 
 function tracesForDate(date) {
@@ -299,8 +322,29 @@ function tracesForNote(noteId) {
   return state.traces.filter((trace) => trace.noteId === noteId);
 }
 
+function standaloneTracesForDate(date) {
+  return tracesForDate(date).filter((trace) => !trace.noteId);
+}
+
+function quickTraceById(traceId) {
+  return state.traces.find((trace) => trace.id === traceId && !trace.noteId);
+}
+
 function noteById(noteId) {
   return state.notes.find((note) => note.id === noteId);
+}
+
+function memoById(memoId) {
+  return state.memos.find((memo) => memo.id === memoId);
+}
+
+function primingById(primingId) {
+  return state.primings.find((priming) => priming.id === primingId);
+}
+
+function memoCompletionTrace(memo) {
+  if (!memo) return null;
+  return state.traces.find((trace) => trace.id === memo.completionTraceId || (trace.source === "memo" && trace.memoId === memo.id)) || null;
 }
 
 function renderFocusItems(target, month) {
@@ -310,6 +354,82 @@ function renderFocusItems(target, month) {
     : "<span>暂时没有设定</span>";
 }
 
+function renderDailyMemo() {
+  const memos = memosForDate(activeDate);
+  $("#memo-list").innerHTML = memos.length
+    ? memos.map((memo) => {
+      const completed = memo.status === "completed";
+      return `
+        <div class="memo-row ${completed ? "completed" : ""}" data-memo-id="${escapeAttr(memo.id)}">
+          <button class="memo-check" type="button" data-memo-action="toggle" aria-pressed="${completed}" aria-label="${completed ? "撤销完成" : "标记完成"}"><span aria-hidden="true">${completed ? "✓" : ""}</span></button>
+          <button class="memo-copy" type="button" data-memo-action="edit">${escapeHtml(memo.text)}</button>
+          ${completed ? "" : `<button class="memo-prime" type="button" data-memo-action="prime">预演</button>`}
+          <button class="memo-remove" type="button" data-memo-action="delete" aria-label="删除这件事" title="删除">×</button>
+        </div>`;
+    }).join("")
+    : `<p class="memo-empty">这里可以放今天要托住的小事。没有也很好。</p>`;
+}
+
+function renderPrimings() {
+  const sessions = primingsForDate(activeDate);
+  const space = $("#priming-space");
+  space.hidden = !sessions.length;
+  if (!sessions.length) {
+    $("#priming-list").innerHTML = "";
+    return;
+  }
+  $("#priming-list").innerHTML = sessions.map((priming) => {
+    const memo = memoById(priming.memoId);
+    const completed = memo?.status === "completed";
+    const details = [
+      priming.process ? `<p><strong>过程</strong>${escapeHtml(priming.process)}</p>` : "",
+      priming.enough ? `<p><strong>边界</strong>${escapeHtml(priming.enough)}</p>` : "",
+      priming.fallback ? `<p><strong>卡住时</strong>${escapeHtml(priming.fallback)}</p>` : ""
+    ].filter(Boolean).join("");
+    return `
+      <article class="priming-card ${completed ? "completed" : ""}" data-priming-id="${escapeAttr(priming.id)}">
+        <div class="priming-card-heading">
+          <div><span>预演</span><h3>${escapeHtml(priming.target)}</h3></div>
+          ${completed ? "<small>已完成</small>" : ""}
+        </div>
+        ${priming.firstStep ? `<div class="priming-next"><span>现在先做</span><strong>${escapeHtml(priming.firstStep)}</strong></div>` : ""}
+        ${details ? `<details><summary>查看过程</summary><div class="priming-detail">${details}</div></details>` : ""}
+        <div class="priming-actions">
+          <button type="button" data-priming-action="edit">调整</button>
+          ${memo && !completed ? `<button type="button" data-priming-action="complete">完成</button>` : ""}
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function renderStandaloneTrace(trace) {
+  const tracker = trackerById(trace.trackerId);
+  return `
+    <article class="note-item stream-data" data-quick-trace="${escapeAttr(trace.id)}">
+      <time class="note-time" datetime="${escapeAttr(trace.createdAt)}">${escapeHtml(trace.timeKnown === false ? "补录" : formatTime(trace.createdAt))}</time>
+      <div class="note-body">
+        <div class="stream-data-line ${toneClass(tracker)}">
+          <span aria-hidden="true">${escapeHtml(tracker?.short || "记")}</span>
+          <p>${escapeHtml(traceSummary(trace))}</p>
+        </div>
+        <div class="note-actions">
+          <button type="button" data-stream-action="edit-trace">编辑</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+function renderTodayStream() {
+  const items = [
+    ...notesForDate(activeDate).map((note) => ({ kind: "note", value: note, moment: note.createdAt })),
+    ...standaloneTracesForDate(activeDate).map((trace) => ({ kind: "trace", value: trace, moment: trace.createdAt }))
+  ].sort((a, b) => new Date(a.moment) - new Date(b.moment));
+  $("#note-count").textContent = `${items.length} 条痕迹`;
+  $("#note-list").innerHTML = items.length
+    ? items.map((item) => item.kind === "note" ? renderNote(item.value) : renderStandaloneTrace(item.value)).join("")
+    : `<p class="empty-copy">这一天还是空白。<br />可以只留下一句话。</p>`;
+}
+
 function renderToday() {
   const today = todayKey();
   const isToday = activeDate === today;
@@ -317,11 +437,9 @@ function renderToday() {
   $("#today-title").textContent = formatDay(activeDate);
   $("#return-today").hidden = isToday;
   $("#history-notice").hidden = isToday;
-  renderFocusItems($("#today-focus-items"), monthKey(activeDate));
-
-  const notes = notesForDate(activeDate);
-  $("#note-count").textContent = `${notes.length} 条记录`;
-  $("#note-list").innerHTML = notes.length ? notes.map(renderNote).join("") : `<p class="empty-copy">这一天还是空白。<br />可以只留下一句话。</p>`;
+  renderDailyMemo();
+  renderPrimings();
+  renderTodayStream();
 
   if (!editingNoteId) $("#note-input").value = state.drafts[activeDate] || "";
   autoResize($("#note-input"));
@@ -396,7 +514,9 @@ function renderSelectedDay() {
   $("#selected-day-title").textContent = formatDay(selectedCalendarDate, true);
   const traces = tracesForDate(selectedCalendarDate);
   const notes = notesForDate(selectedCalendarDate);
-  if (!traces.length && !notes.length) {
+  const memos = memosForDate(selectedCalendarDate);
+  const primings = primingsForDate(selectedCalendarDate);
+  if (!traces.length && !notes.length && !memos.length && !primings.length) {
     $("#selected-day-content").innerHTML = `<p class="empty-copy">这一天还没有留下内容。</p>`;
     return;
   }
@@ -408,12 +528,22 @@ function renderSelectedDay() {
         return `<div class="day-detail-row ${toneClass(tracker)}"><strong>${escapeHtml(tracker?.name || "记录")}</strong><p>${escapeHtml(traceDetail(trace))}</p></div>`;
       }).join("")}
     </div>` : "";
+  const memoRows = memos.length ? `
+    <div class="day-originals">
+      <strong>Daily Memo</strong>
+      ${memos.map((memo) => `<p>${memo.status === "completed" ? "✓" : "○"}　${escapeHtml(memo.text)}</p>`).join("")}
+    </div>` : "";
+  const primingRows = primings.length ? `
+    <div class="day-originals">
+      <strong>当天预演</strong>
+      ${primings.map((priming) => `<p>${escapeHtml(priming.target)}${priming.firstStep ? `；第一步：${escapeHtml(priming.firstStep)}` : ""}</p>`).join("")}
+    </div>` : "";
   const originals = notes.length ? `
     <div class="day-originals">
       <strong>当天原文</strong>
       ${notes.map((note) => `<p><time>${escapeHtml(noteTimeLabel(note))}</time>　${escapeHtml(note.text)}</p>`).join("")}
     </div>` : "";
-  $("#selected-day-content").innerHTML = traceRows + originals;
+  $("#selected-day-content").innerHTML = traceRows + memoRows + primingRows + originals;
 }
 
 function renderMonthSummary() {
@@ -459,7 +589,22 @@ function summarizeTracker(tracker, traces) {
   const days = new Set(traces.map((trace) => trace.date)).size;
   const count = traces.length;
   if (!tracker) return `${days} 天 · ${count} 次`;
-  if (tracker.preset === "movement") {
+  if (tracker.preset === "faith") {
+    const practices = countValues(traces.map((trace) => trace.fields?.practice));
+    return `${days} 天 · ${count} 次${practices.length ? ` · ${practices.join("、")}` : ""}`;
+  }
+  if (tracker.preset === "care") {
+    const activities = countValues(traces.map((trace) => trace.fields?.activity));
+    return `${days} 天 · ${count} 次${activities.length ? ` · ${activities.join("、")}` : ""}`;
+  }
+  if (tracker.preset === "completed") {
+    const details = traces.map((trace) => trace.fields?.detail).filter(Boolean);
+    return `${count} 项${details.length ? ` · ${details.slice(0, 4).join("、")}${details.length > 4 ? "等" : ""}` : ""}`;
+  }
+  if (tracker.preset === "dream") {
+    const clarity = countValues(traces.map((trace) => trace.fields?.clarity));
+    return `记得 ${count} 次${clarity.length ? ` · ${clarity.join("、")}` : ""}`;
+  }  if (tracker.preset === "movement") {
     const minutes = traces.reduce((sum, trace) => sum + numeric(trace.fields?.durationMin), 0);
     const distance = traces.reduce((sum, trace) => sum + numeric(trace.fields?.distanceKm), 0);
     return `${days} 天 · ${count} 次${minutes ? ` · ${formatNumber(minutes, 0)} 分钟` : ""}${distance ? ` · ${formatNumber(distance)} 公里` : ""}`;
@@ -487,7 +632,10 @@ function summarizeTracker(tracker, traces) {
     const hours = traces.map((trace) => numeric(trace.fields?.hours)).filter(Boolean);
     const average = hours.length ? hours.reduce((sum, value) => sum + value, 0) / hours.length : 0;
     const quality = countValues(traces.map((trace) => trace.fields?.quality));
-    return `记录 ${days} 天${average ? ` · 平均 ${formatNumber(average)} 小时` : ""}${quality.length ? ` · ${quality.join("、")}` : ""}`;
+    const recovery = countValues(traces.map((trace) => trace.fields?.recovery));
+    const naps = traces.map((trace) => numeric(trace.fields?.napMinutes)).filter(Boolean);
+    const napTotal = naps.reduce((sum, value) => sum + value, 0);
+    return `记录 ${days} 天${average ? ` · 平均 ${formatNumber(average)} 小时` : ""}${quality.length ? ` · 睡眠 ${quality.join("、")}` : ""}${recovery.length ? ` · 恢复感 ${recovery.join("、")}` : ""}${naps.length ? ` · 补觉 ${naps.length} 次 / ${formatNumber(napTotal, 0)} 分钟` : ""}`;
   }
   if (tracker.mode === "duration") {
     const minutes = traces.reduce((sum, trace) => sum + numeric(trace.fields?.durationMin), 0);
@@ -508,7 +656,10 @@ function traceSummary(trace) {
   const tracker = trackerById(trace.trackerId);
   const fields = trace.fields || {};
   if (!tracker) return "记录";
-  if (tracker.preset === "movement") {
+  if (tracker.preset === "faith") return fields.detail ? `${fields.practice || "灵修"} · ${fields.detail}` : (fields.practice || "灵修");
+  if (tracker.preset === "care") return fields.detail ? `${fields.activity || "庶务"} · ${fields.detail}` : (fields.activity || "庶务");
+  if (tracker.preset === "completed") return fields.detail ? `完成 · ${fields.detail}` : "完成一件事";
+  if (tracker.preset === "dream") return fields.detail ? `梦 · ${fields.detail}` : "记得梦";  if (tracker.preset === "movement") {
     return `${fields.activity || "运动"}${fields.durationMin ? ` ${formatNumber(numeric(fields.durationMin), 0)}m` : ""}${fields.distanceKm ? ` ${formatNumber(numeric(fields.distanceKm))}km` : ""}`;
   }
   if (tracker.preset === "reading") {
@@ -529,6 +680,7 @@ function traceDetail(trace) {
   const fields = trace.fields || {};
   const parts = [traceSummary(trace)];
   if (tracker?.preset === "people" && fields.context) parts.push(fields.context);
+  if (tracker?.preset === "sleep" && fields.bedtimeActivity) parts.push(`睡前：${fields.bedtimeActivity}`);
   if (tracker?.preset === "sleep" && fields.factors) parts.push(`影响：${fields.factors}`);
   return parts.join("；");
 }
@@ -585,10 +737,21 @@ function selectField(label, field, value, choices, full = false) {
 
 function traceFieldset(tracker, fields) {
   let content = "";
-  if (tracker.preset === "movement") {
-    content = inputField("做了什么", "activity", fields.activity, { placeholder: "例如：跑步机上坡走", full: true })
+  if (tracker.preset === "faith") {
+    content = selectField("实践", "practice", fields.practice || "", ["", "祷告", "读经", "默想", "敬拜", "阅读属灵读物", "其他"])
+      + inputField("触动或一句记录", "detail", fields.detail, { placeholder: "可以留空", full: true });
+  } else if (tracker.preset === "care") {
+    content = selectField("项目", "activity", fields.activity || "", ["", "洗澡", "洗衣", "排便", "自我按摩", "其他"])
+      + inputField("补充", "detail", fields.detail, { placeholder: "需要时再写", full: true });
+  } else if (tracker.preset === "movement") {
+    content = inputField("做了什么", "activity", fields.activity, { placeholder: "跑步机上坡走、八段锦、拉伸……", full: true })
       + inputField("分钟", "durationMin", fields.durationMin, { type: "number", inputmode: "decimal", min: 0, step: 1 })
       + inputField("公里数", "distanceKm", fields.distanceKm, { type: "number", inputmode: "decimal", min: 0, step: 0.1 });
+  } else if (tracker.preset === "completed") {
+    content = inputField("完成了什么", "detail", fields.detail, { placeholder: "例如：完成文件打包", full: true });
+  } else if (tracker.preset === "dream") {
+    content = inputField("留下一句话", "detail", fields.detail, { placeholder: "只写还记得的部分", full: true })
+      + selectField("清晰度", "clarity", fields.clarity || "", ["", "清晰", "模糊"]);
   } else if (tracker.preset === "reading") {
     content = selectField("类型", "itemType", fields.itemType || "书", ["书", "文章"])
       + inputField("名称", "title", fields.title, { placeholder: "书名或文章名", full: true })
@@ -602,7 +765,10 @@ function traceFieldset(tracker, fields) {
   } else if (tracker.preset === "sleep") {
     content = inputField("睡眠时长（小时）", "hours", fields.hours, { type: "number", inputmode: "decimal", min: 0, max: 24, step: 0.1 })
       + selectField("睡得如何", "quality", fields.quality || "", ["", "好", "一般", "差"])
-      + inputField("影响因素", "factors", fields.factors, { placeholder: "例如：鸟叫、早醒、睡前活动", full: true });
+      + selectField("恢复感", "recovery", fields.recovery || "", ["", "好", "一般", "差"])
+      + inputField("补觉（分钟）", "napMinutes", fields.napMinutes, { type: "number", inputmode: "decimal", min: 0, step: 1 })
+      + inputField("睡前活动", "bedtimeActivity", fields.bedtimeActivity, { placeholder: "例如：刷手机、阅读、深聊", full: true })
+      + inputField("影响因素", "factors", fields.factors, { placeholder: "鸟叫、早醒、入睡困难、环境噪音……", full: true });
   } else if (tracker.mode === "duration") {
     content = inputField("简短痕迹", "detail", fields.detail, { placeholder: "发生了什么", full: true })
       + inputField("分钟", "durationMin", fields.durationMin, { type: "number", inputmode: "decimal", min: 0, step: 1 });
@@ -663,6 +829,114 @@ function removeTracesForActiveNote() {
   showToast("已移出月历，原文仍然保留。");
 }
 
+function quickChoiceButton(id) {
+  const tracker = trackerById(id);
+  if (!tracker) return "";
+  const pressed = selectedQuickTrackerId === id;
+  return `<button class="tracker-choice ${toneClass(tracker)}" type="button" data-quick-tracker="${escapeAttr(id)}" aria-pressed="${pressed}">${escapeHtml(tracker.name)}</button>`;
+}
+
+function captureQuickDraft() {
+  const fieldset = $("[data-tracker-fields]", $("#quick-fields"));
+  if (!fieldset) return;
+  const fields = {};
+  $$('[data-field]', fieldset).forEach((input) => { fields[input.dataset.field] = input.value; });
+  quickDraft = fields;
+}
+
+function renderQuickFields() {
+  const target = $("#quick-fields");
+  const tracker = trackerById(selectedQuickTrackerId);
+  target.innerHTML = tracker
+    ? traceFieldset(tracker, quickDraft)
+    : `<p class="quick-prompt">先选一类。只填今天真正想留下的部分。</p>`;
+}
+
+function renderQuickChoices() {
+  const primary = QUICK_TRACKER_IDS.map(trackerById).filter(Boolean);
+  const remaining = state.trackers.filter((tracker) => !QUICK_TRACKER_IDS.includes(tracker.id));
+  $("#quick-primary-choices").innerHTML = primary.map((tracker) => quickChoiceButton(tracker.id)).join("");
+  $("#quick-more-choices").innerHTML = remaining.map((tracker) => quickChoiceButton(tracker.id)).join("");
+  renderQuickFields();
+}
+
+function openQuickDialog(traceId = null) {
+  const existing = traceId ? quickTraceById(traceId) : null;
+  activeQuickTraceId = existing?.id || null;
+  selectedQuickTrackerId = existing?.trackerId || null;
+  quickDraft = { ...(existing?.fields || {}) };
+  $("#quick-dialog-title").textContent = existing ? "调整这笔数据" : "记一笔数据";
+  $("#delete-quick-trace").hidden = !existing;
+  const needsMore = Boolean(existing && !QUICK_TRACKER_IDS.includes(existing.trackerId));
+  $("#toggle-quick-more").setAttribute("aria-expanded", String(needsMore));
+  $("#quick-more-choices").hidden = !needsMore;
+  renderQuickChoices();
+  $("#quick-dialog").showModal();
+}
+
+function quickFieldsValid(tracker, fields) {
+  const hasAny = Object.values(fields).some((value) => String(value || "").trim());
+  if (!tracker) return false;
+  if (tracker.preset === "completed") return Boolean(String(fields.detail || "").trim());
+  if (tracker.preset === "movement" || tracker.preset === "sleep" || tracker.preset === "faith" || tracker.preset === "care") return hasAny;
+  if (tracker.preset === "body") return Boolean(String(fields.signal || "").trim());
+  if (tracker.preset === "reading") return Boolean(String(fields.title || fields.progressValue || "").trim());
+  if (tracker.preset === "people") return Boolean(String(fields.name || fields.context || "").trim());
+  if (tracker.preset === "dream") return hasAny;
+  return hasAny;
+}
+
+function saveQuickTrace(event) {
+  event.preventDefault();
+  captureQuickDraft();
+  const tracker = trackerById(selectedQuickTrackerId);
+  if (!tracker) {
+    showToast("先选择要记下的类型。", true);
+    return;
+  }
+  if (!quickFieldsValid(tracker, quickDraft)) {
+    showToast("留下一点内容或数值再保存。", true);
+    return;
+  }
+  const now = new Date().toISOString();
+  let existing = activeQuickTraceId ? quickTraceById(activeQuickTraceId) : null;
+  if (!existing && selectedQuickTrackerId === "sleep") {
+    existing = standaloneTracesForDate(activeDate).find((trace) => trace.trackerId === "sleep") || null;
+  }
+  const trace = {
+    id: existing?.id || makeId("trace"),
+    noteId: null,
+    memoId: existing?.memoId || null,
+    source: existing?.source || "quick",
+    date: existing?.date || activeDate,
+    trackerId: selectedQuickTrackerId,
+    fields: { ...quickDraft },
+    timeKnown: existing?.timeKnown ?? (activeDate === todayKey()),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+  if (existing) state.traces = state.traces.map((item) => item.id === existing.id ? trace : item);
+  else state.traces.push(trace);
+  persistState();
+  $("#quick-dialog").close();
+  renderAll();
+  showToast(existing ? "这笔数据已更新。" : "已记下，月历也会更新。");
+}
+
+function deleteQuickTrace() {
+  const trace = activeQuickTraceId ? quickTraceById(activeQuickTraceId) : null;
+  if (!trace || !window.confirm("删除这笔数据？原始文字记录不会受影响。")) return;
+  if (trace.source === "memo" && trace.memoId) {
+    $("#quick-dialog").close();
+    setMemoCompleted(trace.memoId, false);
+    return;
+  }
+  state.traces = state.traces.filter((item) => item.id !== trace.id);
+  persistState();
+  $("#quick-dialog").close();
+  renderAll();
+  showToast("这笔数据已删除。");
+}
 function openTrackerManager(month) {
   managerMonth = month;
   managerIds = [...getMonthFocusIds(month)];
@@ -745,6 +1019,191 @@ function createCustomTracker(event) {
   $("#new-tracker-form").reset();
   $("#new-tracker-unit-label").hidden = true;
   showToast(`已加入“${name}”。`);
+}
+
+function resetMemoComposer() {
+  editingMemoId = null;
+  $("#memo-input").value = "";
+  $("#save-memo").textContent = "＋";
+  $("#save-memo").setAttribute("aria-label", "加入 Daily Memo");
+  $("#cancel-memo-edit").hidden = true;
+}
+
+function saveMemo(event) {
+  event.preventDefault();
+  const text = $("#memo-input").value.trim();
+  if (!text) {
+    showToast("先记下一件事。", true);
+    $("#memo-input").focus();
+    return;
+  }
+  const now = new Date().toISOString();
+  const existing = editingMemoId ? memoById(editingMemoId) : null;
+  if (existing) {
+    existing.text = text;
+    existing.updatedAt = now;
+    const completion = memoCompletionTrace(existing);
+    if (completion) {
+      completion.fields = { ...(completion.fields || {}), detail: text };
+      completion.updatedAt = now;
+    }
+    state.primings.filter((priming) => priming.memoId === existing.id).forEach((priming) => {
+      priming.target = text;
+      priming.updatedAt = now;
+    });
+  } else {
+    state.memos.push({
+      id: makeId("memo"),
+      date: activeDate,
+      text,
+      status: "open",
+      completionTraceId: null,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+  resetMemoComposer();
+  persistState();
+  renderAll();
+  showToast(existing ? "Daily Memo 已更新。" : "已经放进今天。");
+}
+
+function editMemo(memoId) {
+  const memo = memoById(memoId);
+  if (!memo) return;
+  editingMemoId = memo.id;
+  $("#memo-input").value = memo.text;
+  $("#save-memo").textContent = "✓";
+  $("#save-memo").setAttribute("aria-label", "更新 Daily Memo");
+  $("#cancel-memo-edit").hidden = false;
+  $("#memo-input").focus();
+}
+
+function setMemoCompleted(memoId, completed) {
+  const memo = memoById(memoId);
+  if (!memo) return;
+  const now = new Date().toISOString();
+  memo.status = completed ? "completed" : "open";
+  memo.completedAt = completed ? now : null;
+  memo.updatedAt = now;
+  const existing = memoCompletionTrace(memo);
+  if (completed) {
+    const trace = {
+      id: existing?.id || makeId("trace"),
+      noteId: null,
+      memoId: memo.id,
+      source: "memo",
+      date: memo.date,
+      trackerId: "completed",
+      fields: { detail: memo.text },
+      timeKnown: memo.date === todayKey(),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    };
+    if (existing) state.traces = state.traces.map((item) => item.id === existing.id ? trace : item);
+    else state.traces.push(trace);
+    memo.completionTraceId = trace.id;
+  } else {
+    state.traces = state.traces.filter((trace) => trace.id !== existing?.id && !(trace.source === "memo" && trace.memoId === memo.id));
+    memo.completionTraceId = null;
+  }
+  persistState();
+  renderAll();
+  showToast(completed ? "已记为完成，月历也会更新。" : "已撤销完成记录。");
+}
+
+function deleteMemo(memoId) {
+  const memo = memoById(memoId);
+  if (!memo || !window.confirm("删除这条 Daily Memo？相关的完成痕迹也会删除。")) return;
+  const completion = memoCompletionTrace(memo);
+  state.memos = state.memos.filter((item) => item.id !== memo.id);
+  if (completion) state.traces = state.traces.filter((trace) => trace.id !== completion.id);
+  state.primings.filter((priming) => priming.memoId === memo.id).forEach((priming) => {
+    priming.memoId = null;
+    priming.updatedAt = new Date().toISOString();
+  });
+  if (editingMemoId === memo.id) resetMemoComposer();
+  persistState();
+  renderAll();
+  showToast("这条 Memo 已删除。");
+}
+
+function populatePrimingMemoOptions(selectedMemoId = "") {
+  const memos = memosForDate(activeDate).filter((memo) => memo.status !== "completed" || memo.id === selectedMemoId);
+  $("#priming-memo-select").innerHTML = [
+    '<option value="">不关联 Daily Memo</option>',
+    ...memos.map((memo) => `<option value="${escapeAttr(memo.id)}" ${memo.id === selectedMemoId ? "selected" : ""}>${escapeHtml(memo.text)}</option>`)
+  ].join("");
+}
+
+function openPrimingDialog(memoId = null, primingId = null) {
+  const priming = primingId ? primingById(primingId) : null;
+  const memo = memoById(priming?.memoId || memoId);
+  activePrimingId = priming?.id || null;
+  populatePrimingMemoOptions(memo?.id || "");
+  $("#priming-dialog-title").textContent = priming ? "调整行动线" : "预演一下";
+  $("#priming-target").value = priming?.target || memo?.text || "";
+  $("#priming-process").value = priming?.process || "";
+  $("#priming-first-step").value = priming?.firstStep || "";
+  $("#priming-enough").value = priming?.enough || "";
+  $("#priming-fallback").value = priming?.fallback || "";
+  $("#delete-priming").hidden = !priming;
+  $("#priming-dialog").showModal();
+  requestAnimationFrame(() => {
+    const target = memo ? $("#priming-process") : $("#priming-target");
+    target.focus();
+  });
+}
+
+function savePriming(event) {
+  event.preventDefault();
+  const memoId = $("#priming-memo-select").value || null;
+  const target = $("#priming-target").value.trim();
+  const process = $("#priming-process").value.trim();
+  const firstStep = $("#priming-first-step").value.trim();
+  const enough = $("#priming-enough").value.trim();
+  const fallback = $("#priming-fallback").value.trim();
+  if (!target) {
+    showToast("先写下这次要预演的事情。", true);
+    $("#priming-target").focus();
+    return;
+  }
+  if (!process && !firstStep) {
+    showToast("说说过程，或留下一步可以开始的动作。", true);
+    $("#priming-process").focus();
+    return;
+  }
+  const now = new Date().toISOString();
+  const existing = activePrimingId ? primingById(activePrimingId) : null;
+  const value = {
+    id: existing?.id || makeId("priming"),
+    date: existing?.date || activeDate,
+    memoId,
+    target,
+    process,
+    firstStep,
+    enough,
+    fallback,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+  if (existing) state.primings = state.primings.map((item) => item.id === existing.id ? value : item);
+  else state.primings.push(value);
+  persistState();
+  $("#priming-dialog").close();
+  renderAll();
+  showToast(existing ? "行动线已更新。" : "行动线已经留下。");
+}
+
+function deletePriming() {
+  const priming = activePrimingId ? primingById(activePrimingId) : null;
+  if (!priming || !window.confirm("删除这次预演？Daily Memo 和原始记录不会受影响。")) return;
+  state.primings = state.primings.filter((item) => item.id !== priming.id);
+  persistState();
+  $("#priming-dialog").close();
+  renderAll();
+  showToast("这次预演已删除。");
 }
 
 function switchView(view, options = {}) {
@@ -856,20 +1315,31 @@ function monthSummaryRows(key) {
 }
 
 function buildMonthMarkdown(key) {
-  const lines = [`# Life Log · ${formatMonth(key)}`, "", "> 基于已经放进月历的记录。空白表示没有记录，不代表没有发生。", "", "## 本月留意", ""];
+  const lines = [`# Life Log · ${formatMonth(key)}`, "", "> 基于你主动记下的数据。空白表示没有记录，不代表没有发生。", "", "## 本月留意", ""];
   const focusNames = getMonthFocusIds(key).map((id) => trackerById(id)?.name).filter(Boolean);
   lines.push(focusNames.length ? focusNames.join(" · ") : "未设定", "", "## 按日期", "");
   const dates = [...new Set([
     ...state.notes.filter((note) => monthKey(note.date) === key).map((note) => note.date),
+    ...state.memos.filter((memo) => monthKey(memo.date) === key).map((memo) => memo.date),
+    ...state.primings.filter((priming) => monthKey(priming.date) === key).map((priming) => priming.date),
     ...state.traces.filter((trace) => monthKey(trace.date) === key).map((trace) => trace.date)
   ])].sort();
   if (!dates.length) lines.push("这个月还没有记录。", "");
   dates.forEach((date) => {
     lines.push(`### ${formatDay(date, true)}`, "");
+    memosForDate(date).forEach((memo) => lines.push(`- [${memo.status === "completed" ? "x" : " "}] Daily Memo · ${memo.text.replace(/\n/g, " ")}`));
+    primingsForDate(date).forEach((priming) => {
+      lines.push(`- 预演 · ${priming.target.replace(/\n/g, " ")}`);
+      if (priming.process) lines.push(`  - 过程：${priming.process.replace(/\n/g, " ")}`);
+      if (priming.firstStep) lines.push(`  - 第一步：${priming.firstStep.replace(/\n/g, " ")}`);
+      if (priming.enough) lines.push(`  - 完成边界：${priming.enough.replace(/\n/g, " ")}`);
+      if (priming.fallback) lines.push(`  - 卡住时：${priming.fallback.replace(/\n/g, " ")}`);
+    });
     notesForDate(date).forEach((note) => {
       lines.push(`- ${noteTimeLabel(note)} ${note.text.replace(/\n/g, " ")}`);
       tracesForNote(note.id).forEach((trace) => lines.push(`  - ${trackerById(trace.trackerId)?.name || "记录"}：${traceDetail(trace)}`));
     });
+    standaloneTracesForDate(date).filter((trace) => trace.source !== "memo").forEach((trace) => lines.push(`- 数据 · ${trackerById(trace.trackerId)?.name || "记录"}：${traceDetail(trace)}`));
     lines.push("");
   });
   lines.push("## 月度小结", "");
@@ -899,10 +1369,26 @@ function downloadMonth() {
 }
 
 function fullBackupPayload() {
+  const exportedAt = new Date().toISOString();
+  const allItems = [...state.notes, ...state.memos, ...state.primings, ...state.traces];
+  const latestUpdatedAt = allItems.map((item) => item.updatedAt || item.createdAt).filter(Boolean).sort().at(-1) || null;
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
+    exportedAt,
+    context: {
+      artifactId: "life-log",
+      lineage: ARTIFACT_LINEAGE,
+      schemaVersion: STATE_VERSION,
+      latestUpdatedAt,
+      recordCounts: {
+        notes: state.notes.length,
+        memos: state.memos.length,
+        primings: state.primings.length,
+        traces: state.traces.length
+      },
+      handoff: "整合这份 Life Log"
+    },
     data: JSON.parse(JSON.stringify(state))
   };
 }
@@ -994,6 +1480,8 @@ function mergeImportedState(localValue, importedValue) {
   const merged = normalizeState({
     version: Math.max(local.version || 1, imported.version || 1),
     notes: mergeItems(local.notes, imported.notes),
+    memos: mergeItems(local.memos, imported.memos),
+    primings: mergeItems(local.primings, imported.primings),
     traces: mergeItems(local.traces, imported.traces),
     trackers: mergeItems(local.trackers, imported.trackers),
     monthPreferences: { ...imported.monthPreferences, ...local.monthPreferences },
@@ -1007,7 +1495,7 @@ function mergeImportedState(localValue, importedValue) {
   });
   const noteIds = new Set(merged.notes.map((note) => note.id));
   const trackerIds = new Set(merged.trackers.map((tracker) => tracker.id));
-  merged.traces = merged.traces.filter((trace) => noteIds.has(trace.noteId) && trackerIds.has(trace.trackerId));
+  merged.traces = merged.traces.filter((trace) => trackerIds.has(trace.trackerId) && (trace.noteId ? noteIds.has(trace.noteId) : true));
   return merged;
 }
 
@@ -1015,17 +1503,18 @@ async function importBackupFile(file) {
   if (!file) return;
   try {
     const parsed = JSON.parse(await file.text());
-    if (parsed?.format !== BACKUP_FORMAT || parsed?.version !== BACKUP_VERSION || !parsed?.data) {
+    if (parsed?.format !== BACKUP_FORMAT || ![1, 2, 3].includes(parsed?.version) || !parsed?.data) {
       throw new Error("无法识别这个备份文件。");
     }
     const incomingNotes = Array.isArray(parsed.data.notes) ? parsed.data.notes.length : 0;
+    const incomingMemos = Array.isArray(parsed.data.memos) ? parsed.data.memos.length : 0;
     state = mergeImportedState(state, parsed.data);
     persistState("导入后已保存");
     await storageWriteQueue;
     renderAll();
     renderBackupStatus();
     $("#backup-dialog").close();
-    showToast("已导入并合并 " + incomingNotes + " 条原始记录。");
+    showToast(`已合并 ${incomingNotes} 条原始记录${incomingMemos ? `和 ${incomingMemos} 条 Memo` : ""}。`);
   } catch (error) {
     showToast(error?.message || "备份导入失败。", true);
   } finally {
@@ -1035,7 +1524,7 @@ async function importBackupFile(file) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const register = () => navigator.serviceWorker.register("./sw.js?v=20260719-formal").catch(() => {});
+  const register = () => navigator.serviceWorker.register("./sw.js?v=20260803-v21-loop").catch(() => {});
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }
@@ -1045,7 +1534,11 @@ function checkDateChange() {
   if (current === lastToday) return;
   const wasOnToday = activeDate === lastToday;
   lastToday = current;
-  if (wasOnToday) activeDate = current;
+  if (wasOnToday) {
+    activeDate = current;
+    resetComposer();
+    resetMemoComposer();
+  }
   if (calendarMonth === monthKey(addDays(current, -1))) {
     calendarMonth = monthKey(current);
     selectedCalendarDate = current;
@@ -1059,10 +1552,11 @@ function bindEvents() {
   $("#brand-today").addEventListener("click", () => {
     activeDate = todayKey();
     resetComposer();
+    resetMemoComposer();
     switchView("today", { scrollToEnd: true });
   });
-  $("#return-today").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); switchView("today", { scrollToEnd: true }); });
-  $("#history-return").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); switchView("today", { scrollToEnd: true }); });
+  $("#return-today").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); resetMemoComposer(); switchView("today", { scrollToEnd: true }); });
+  $("#history-return").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); resetMemoComposer(); switchView("today", { scrollToEnd: true }); });
   $("#note-form").addEventListener("submit", saveNote);
   $("#note-input").addEventListener("input", (event) => {
     autoResize(event.target);
@@ -1073,7 +1567,61 @@ function bindEvents() {
     draftTimer = setTimeout(() => persistState("草稿已保存"), 300);
   });
   $("#cancel-edit").addEventListener("click", resetComposer);
+  $("#memo-form").addEventListener("submit", saveMemo);
+  $("#cancel-memo-edit").addEventListener("click", resetMemoComposer);
+  $("#memo-list").addEventListener("click", (event) => {
+    const row = event.target.closest("[data-memo-id]");
+    const action = event.target.closest("[data-memo-action]")?.dataset.memoAction;
+    if (!row || !action) return;
+    const memo = memoById(row.dataset.memoId);
+    if (!memo) return;
+    if (action === "toggle") setMemoCompleted(memo.id, memo.status !== "completed");
+    if (action === "edit") editMemo(memo.id);
+    if (action === "prime") openPrimingDialog(memo.id);
+    if (action === "delete") deleteMemo(memo.id);
+  });
+  $("#open-day-priming").addEventListener("click", () => openPrimingDialog());
+  $("#priming-list").addEventListener("click", (event) => {
+    const card = event.target.closest("[data-priming-id]");
+    const action = event.target.closest("[data-priming-action]")?.dataset.primingAction;
+    if (!card || !action) return;
+    const priming = primingById(card.dataset.primingId);
+    if (!priming) return;
+    if (action === "edit") openPrimingDialog(priming.memoId, priming.id);
+    if (action === "complete" && priming.memoId) setMemoCompleted(priming.memoId, true);
+  });
+  $("#priming-form").addEventListener("submit", savePriming);
+  $("#close-priming-dialog").addEventListener("click", () => $("#priming-dialog").close());
+  $("#delete-priming").addEventListener("click", deletePriming);
+  $("#priming-memo-select").addEventListener("change", (event) => {
+    const memo = memoById(event.target.value);
+    if (memo) $("#priming-target").value = memo.text;
+  });
+  $("#open-quick-log").addEventListener("click", () => openQuickDialog());
+  $("#quick-dialog").addEventListener("click", (event) => {
+    const choice = event.target.closest("[data-quick-tracker]");
+    if (!choice) return;
+    if (selectedQuickTrackerId === choice.dataset.quickTracker) return;
+    selectedQuickTrackerId = choice.dataset.quickTracker;
+    quickDraft = {};
+    renderQuickChoices();
+  });
+  $("#quick-form").addEventListener("submit", saveQuickTrace);
+  $("#close-quick-dialog").addEventListener("click", () => $("#quick-dialog").close());
+  $("#delete-quick-trace").addEventListener("click", deleteQuickTrace);
+  $("#toggle-quick-more").addEventListener("click", () => {
+    const expanded = $("#toggle-quick-more").getAttribute("aria-expanded") === "true";
+    $("#toggle-quick-more").setAttribute("aria-expanded", String(!expanded));
+    $("#quick-more-choices").hidden = expanded;
+  });
   $("#note-list").addEventListener("click", (event) => {
+    const traceElement = event.target.closest("[data-quick-trace]");
+    if (traceElement && event.target.closest("[data-stream-action]")) {
+      const trace = quickTraceById(traceElement.dataset.quickTrace);
+      if (trace?.source === "memo" && trace.memoId) editMemo(trace.memoId);
+      else if (trace) openQuickDialog(trace.id);
+      return;
+    }
     const noteElement = event.target.closest("[data-note-id]");
     const action = event.target.closest("[data-note-action]")?.dataset.noteAction;
     if (!noteElement || !action) return;
@@ -1127,10 +1675,10 @@ function bindEvents() {
   $("#open-selected-day").addEventListener("click", () => {
     activeDate = selectedCalendarDate;
     resetComposer();
+    resetMemoComposer();
     switchView("today", { scrollToEnd: true });
   });
 
-  $("#manage-trackers-today").addEventListener("click", () => openTrackerManager(monthKey(activeDate)));
   $("#manage-trackers-month").addEventListener("click", () => openTrackerManager(calendarMonth));
   $("#close-tracker-dialog").addEventListener("click", () => $("#tracker-dialog").close());
   $("#finish-tracker-management").addEventListener("click", () => $("#tracker-dialog").close());

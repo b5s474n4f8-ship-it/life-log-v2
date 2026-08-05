@@ -10,10 +10,10 @@
   <meta name="apple-mobile-web-app-title" content="生命力日志" />
   <meta name="format-detection" content="telephone=no" />
   <title>生命力日志</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260719-formal" />
-  <link rel="icon" href="./mark.svg?v=20260719-formal" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260719-formal" />
-  <link rel="stylesheet" href="./styles.css?v=20260719-formal" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260803-v21-loop" />
+  <link rel="icon" href="./mark.svg?v=20260803-v21-loop" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260803-v21-loop" />
+  <link rel="stylesheet" href="./styles.css?v=20260803-v21-loop" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
@@ -53,14 +53,35 @@
           <button type="button" id="history-return">返回今天</button>
         </div>
 
-        <div class="focus-line">
-          <span class="focus-label">本月留意</span>
-          <span class="focus-items" id="today-focus-items"></span>
-          <button class="inline-command" id="manage-trackers-today" type="button">调整</button>
-        </div>
+        <section class="daily-memo" aria-labelledby="daily-memo-title">
+          <header class="daily-memo-header">
+            <div>
+              <h2 id="daily-memo-title">Daily Memo</h2>
+              <p>今天要记得的事</p>
+            </div>
+            <button class="text-command" id="open-day-priming" type="button">预演一下</button>
+          </header>
+          <form class="memo-composer" id="memo-form">
+            <label class="sr-only" for="memo-input">记一件今天要记得的事</label>
+            <input id="memo-input" type="text" maxlength="240" placeholder="记一件事" autocomplete="off" />
+            <button class="memo-cancel" id="cancel-memo-edit" type="button" hidden>取消</button>
+            <button class="memo-add" id="save-memo" type="submit" aria-label="加入 Daily Memo" title="加入 Daily Memo">＋</button>
+          </form>
+          <div class="memo-list" id="memo-list"></div>
+        </section>
+
+        <section class="priming-space" id="priming-space" aria-labelledby="priming-space-title" hidden>
+          <header>
+            <div>
+              <h2 id="priming-space-title">今日行动线</h2>
+              <p>只在需要进入状态时展开。</p>
+            </div>
+          </header>
+          <div class="priming-list" id="priming-list"></div>
+        </section>
 
         <section class="note-stream" aria-label="当天记录">
-          <div class="stream-rule"><span id="note-count">0 条记录</span></div>
+          <div class="stream-rule"><span id="note-count">0 条痕迹</span></div>
           <div class="note-list" id="note-list"></div>
         </section>
 
@@ -71,6 +92,7 @@
             <span class="save-state" id="save-state" role="status" aria-live="polite">保存在本机</span>
             <div class="composer-actions">
               <button class="quiet-button" id="cancel-edit" type="button" hidden>取消编辑</button>
+              <button class="data-button" id="open-quick-log" type="button"><span aria-hidden="true">＋</span><span>数据</span></button>
               <button class="primary-button" id="save-note" type="submit">保存</button>
             </div>
           </div>
@@ -121,7 +143,7 @@
               <p class="eyebrow">本月留下的痕迹</p>
               <h2 id="summary-title">月度小结</h2>
             </div>
-            <p>基于已经放进月历的记录。空白只是没有记录，不代表没有发生。</p>
+            <p>基于你主动记下的数据。空白只是没有记录，不代表没有发生。</p>
           </header>
           <div class="summary-list" id="summary-list"></div>
         </section>
@@ -129,6 +151,59 @@
     </section>
   </main>
 
+  <dialog class="sheet-dialog priming-dialog" id="priming-dialog" aria-labelledby="priming-dialog-title">
+    <form class="dialog-shell" id="priming-form">
+      <header class="dialog-header">
+        <div><p class="eyebrow">按需使用</p><h2 id="priming-dialog-title">预演一下</h2></div>
+        <button class="icon-button close-button" id="close-priming-dialog" type="button" aria-label="关闭" title="关闭">×</button>
+      </header>
+      <p class="dialog-intro">可以在一天开始或面对困难任务时，把过程说一遍。不是每天必做。</p>
+      <div class="priming-fields">
+        <label>围绕哪件事
+          <select id="priming-memo-select"></select>
+        </label>
+        <label>今天的主线
+          <input id="priming-target" type="text" maxlength="240" placeholder="例如：修改社群分享" required />
+        </label>
+        <label>把过程说一遍
+          <textarea id="priming-process" rows="4" placeholder="从开始到完成，大概会怎样走？可以直接用口述转写。"></textarea>
+        </label>
+        <label>现在的第一步
+          <input id="priming-first-step" type="text" maxlength="300" placeholder="小到可以马上开始" />
+        </label>
+        <label>到哪里就算够
+          <input id="priming-enough" type="text" maxlength="300" placeholder="给今天一个清楚的边界" />
+        </label>
+        <details>
+          <summary>卡住时，我先……</summary>
+          <label class="sr-only" for="priming-fallback">卡住时的托底动作</label>
+          <input id="priming-fallback" type="text" maxlength="300" placeholder="例如：只开口说一分钟" />
+        </details>
+      </div>
+      <footer class="dialog-actions">
+        <button class="quiet-button" id="delete-priming" type="button" hidden>删除预演</button>
+        <button class="primary-button" type="submit">留下行动线</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="sheet-dialog quick-dialog" id="quick-dialog" aria-labelledby="quick-dialog-title">
+    <form class="dialog-shell" id="quick-form">
+      <header class="dialog-header">
+        <div><p class="eyebrow">可选，不补齐</p><h2 id="quick-dialog-title">记一笔数据</h2></div>
+        <button class="icon-button close-button" id="close-quick-dialog" type="button" aria-label="关闭" title="关闭">×</button>
+      </header>
+      <p class="dialog-intro">只选现在想留下的一类。空白表示没有记录，不代表没有发生。</p>
+      <div class="tracker-choices quick-choices" id="quick-primary-choices"></div>
+      <button class="more-toggle" id="toggle-quick-more" type="button" aria-expanded="false">更多项目</button>
+      <div class="tracker-choices more-choices" id="quick-more-choices" hidden></div>
+      <div class="trace-fields" id="quick-fields"></div>
+      <footer class="dialog-actions">
+        <button class="quiet-button" id="delete-quick-trace" type="button" hidden>删除这笔</button>
+        <button class="primary-button" type="submit">记下</button>
+      </footer>
+    </form>
+  </dialog>
   <dialog class="sheet-dialog" id="trace-dialog" aria-labelledby="trace-dialog-title">
     <form class="dialog-shell" id="trace-form" method="dialog">
       <header class="dialog-header">
@@ -219,13 +294,18 @@
       <p class="backup-meta" id="last-backup-copy">尚未在这台设备上导出完整备份。</p>
       <p class="privacy-note">记录只保存在当前设备；发布网页不包含你的私人内容。</p>
 
+      <section class="context-handoff" aria-labelledby="context-handoff-title">
+        <strong id="context-handoff-title">发给 All-in-Context</strong>
+        <p>使用同一份完整 JSON，发送后说“整合这份 Life Log”。系统只处理新增或修改内容，核心文档回写前会先让你确认一次。</p>
+      </section>
+
       <footer class="dialog-actions single-action">
         <button class="primary-button" id="finish-backup" type="button">完成</button>
       </footer>
     </div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=20260719-formal" defer></script>
+  <script src="./app.js?v=20260803-v21-loop" defer></script>
 </body>
 </html>
 

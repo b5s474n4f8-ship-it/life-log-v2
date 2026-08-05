@@ -2,7 +2,7 @@
   "id": "./",
   "name": "生命力日志",
   "short_name": "Life Log",
-  "description": "随时留下生活原文，并在月历中看见生活痕迹。",
+  "description": "随时留下生活原文，用 Daily Memo 托住今天，也轻量记录睡眠、运动、完成与身体信号。",
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",
