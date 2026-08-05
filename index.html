@@ -10,10 +10,10 @@
   <meta name="apple-mobile-web-app-title" content="生命力日志" />
   <meta name="format-detection" content="telephone=no" />
   <title>生命力日志</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260803-v21-loop" />
-  <link rel="icon" href="./mark.svg?v=20260803-v21-loop" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260803-v21-loop" />
-  <link rel="stylesheet" href="./styles.css?v=20260803-v21-loop" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260805-v211-iphone" />
+  <link rel="icon" href="./mark.svg?v=20260805-v211-iphone" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260805-v211-iphone" />
+  <link rel="stylesheet" href="./styles.css?v=20260805-v211-iphone" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
@@ -107,7 +107,7 @@
             <button class="icon-button" id="previous-month" type="button" aria-label="上个月" title="上个月">‹</button>
             <div>
               <p class="eyebrow">MONTHLY NOTES</p>
-              <h1 id="month-title">2026年7月</h1>
+              <h1 id="month-title" aria-live="polite" aria-atomic="true">2026年7月</h1>
             </div>
             <button class="icon-button" id="next-month" type="button" aria-label="下个月" title="下个月">›</button>
           </div>
@@ -119,7 +119,7 @@
           <button class="inline-command" id="manage-trackers-month" type="button">调整</button>
         </div>
 
-        <section class="calendar-section" aria-label="月份日历">
+        <section class="calendar-section" aria-label="月份日历，可左右滑动切换月份">
           <div class="weekday-row" aria-hidden="true">
             <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
           </div>
@@ -130,9 +130,15 @@
           <header>
             <div>
               <p class="eyebrow">选中的一天</p>
-              <h2 id="selected-day-title">7月18日</h2>
+              <h2 id="selected-day-title" aria-live="polite" aria-atomic="true">7月18日</h2>
             </div>
-            <button class="text-command" id="open-selected-day" type="button">打开这一天</button>
+            <div class="selected-day-actions">
+              <div class="day-stepper" aria-label="切换日期">
+                <button class="icon-button" id="previous-day" type="button" aria-label="前一天" title="前一天">‹</button>
+                <button class="icon-button" id="next-day" type="button" aria-label="后一天" title="后一天">›</button>
+              </div>
+              <button class="text-command" id="open-selected-day" type="button">打开这一天</button>
+            </div>
           </header>
           <div id="selected-day-content"></div>
         </section>
@@ -305,7 +311,7 @@
     </div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=20260803-v21-loop" defer></script>
+  <script src="./app.js?v=20260805-v211-iphone" defer></script>
 </body>
 </html>
 

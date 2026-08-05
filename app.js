@@ -58,6 +58,8 @@ let managerMonth = calendarMonth;
 let managerIds = [];
 let toastTimer = null;
 let draftTimer = null;
+let suppressCalendarClick = false;
+const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function makeId(prefix = "id") {
   const suffix = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -100,6 +102,13 @@ function firstDateOfMonth(key) {
   return `${key}-01`;
 }
 
+function dateInMonth(key, preferredDate = selectedCalendarDate) {
+  const [year, month] = key.split("-").map(Number);
+  const preferredDay = Math.max(1, Number(preferredDate?.slice(-2)) || 1);
+  const lastDay = new Date(year, month, 0, 12).getDate();
+  return `${key}-${String(Math.min(preferredDay, lastDay)).padStart(2, "0")}`;
+}
+
 function formatMonth(key) {
   const [year, month] = key.split("-").map(Number);
   return `${year}年${month}月`;
@@ -117,6 +126,13 @@ function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "现在";
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+function closeDialog(dialog) {
+  if (!dialog?.open) return;
+  const focused = document.activeElement;
+  if (focused instanceof HTMLElement && dialog.contains(focused)) focused.blur();
+  dialog.close();
 }
 
 function noteTimeLabel(note) {
@@ -473,6 +489,104 @@ function renderMonth() {
   renderMonthSummary();
 }
 
+function animateCalendarElement(element, direction) {
+  if (!element || reducedMotionQuery.matches || typeof element.animate !== "function") return;
+  const offset = direction > 0 ? 18 : -18;
+  element.animate(
+    [
+      { opacity: 0.62, transform: `translate3d(${offset}px, 0, 0)` },
+      { opacity: 1, transform: "translate3d(0, 0, 0)" }
+    ],
+    { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+  );
+}
+
+function changeCalendarMonth(amount) {
+  const nextMonth = shiftMonth(calendarMonth, amount);
+  calendarMonth = nextMonth;
+  selectedCalendarDate = dateInMonth(nextMonth);
+  renderMonth();
+  animateCalendarElement($("#calendar-grid"), amount);
+  animateCalendarElement($("#selected-day-content"), amount);
+}
+
+function changeSelectedCalendarDate(amount) {
+  const previousMonth = calendarMonth;
+  selectedCalendarDate = addDays(selectedCalendarDate, amount);
+  calendarMonth = monthKey(selectedCalendarDate);
+  renderMonth();
+  if (calendarMonth !== previousMonth) animateCalendarElement($("#calendar-grid"), amount);
+  animateCalendarElement($("#selected-day-content"), amount);
+}
+
+function bindHorizontalSwipe(surface, onSwipe, options = {}) {
+  if (!surface) return;
+  const visual = options.visual || surface;
+  let gesture = null;
+
+  const reset = () => {
+    if (gesture && surface.hasPointerCapture?.(gesture.pointerId)) {
+      try { surface.releasePointerCapture(gesture.pointerId); } catch {}
+    }
+    visual.classList.remove("is-swiping");
+    visual.style.removeProperty("--swipe-offset");
+    gesture = null;
+  };
+
+  surface.addEventListener("pointerdown", (event) => {
+    if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if (options.ignoreInteractive && event.target.closest("button, a, input, textarea, select, summary")) return;
+    gesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      startedAt: performance.now(),
+      axis: null
+    };
+  });
+
+  surface.addEventListener("pointermove", (event) => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    gesture.lastX = event.clientX;
+    gesture.lastY = event.clientY;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.axis) {
+      if (Math.hypot(dx, dy) < 8) return;
+      gesture.axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? "horizontal" : "vertical";
+      if (gesture.axis === "vertical") {
+        reset();
+        return;
+      }
+      try { surface.setPointerCapture(event.pointerId); } catch {}
+    }
+    if (gesture.axis !== "horizontal") return;
+    event.preventDefault();
+    visual.classList.add("is-swiping");
+    const offset = Math.max(-34, Math.min(34, dx * 0.22));
+    visual.style.setProperty("--swipe-offset", `${offset}px`);
+  });
+
+  const finish = (event, cancelled = false) => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const dx = (Number.isFinite(event.clientX) ? event.clientX : gesture.lastX) - gesture.startX;
+    const duration = Math.max(1, performance.now() - gesture.startedAt);
+    const velocity = Math.abs(dx) / duration;
+    const shouldCommit = !cancelled
+      && gesture.axis === "horizontal"
+      && (Math.abs(dx) >= 52 || (Math.abs(dx) >= 24 && velocity >= 0.42));
+    reset();
+    if (!shouldCommit) return;
+    options.onCommit?.();
+    onSwipe(dx < 0 ? 1 : -1);
+  };
+
+  surface.addEventListener("pointerup", (event) => finish(event));
+  surface.addEventListener("pointercancel", (event) => finish(event, true));
+}
+
 function calendarDates(key) {
   const first = dateFromKey(firstDateOfMonth(key));
   const start = new Date(first);
@@ -816,7 +930,7 @@ function saveTracesForActiveNote() {
     });
   });
   persistState();
-  $("#trace-dialog").close();
+  closeDialog($("#trace-dialog"));
   renderAll();
   showToast(selectedTraceTrackers.size ? "月历痕迹已更新。" : "原文保留，没有加入月历。");
 }
@@ -824,7 +938,7 @@ function saveTracesForActiveNote() {
 function removeTracesForActiveNote() {
   state.traces = state.traces.filter((trace) => trace.noteId !== activeTraceNoteId);
   persistState();
-  $("#trace-dialog").close();
+  closeDialog($("#trace-dialog"));
   renderAll();
   showToast("已移出月历，原文仍然保留。");
 }
@@ -918,7 +1032,7 @@ function saveQuickTrace(event) {
   if (existing) state.traces = state.traces.map((item) => item.id === existing.id ? trace : item);
   else state.traces.push(trace);
   persistState();
-  $("#quick-dialog").close();
+  closeDialog($("#quick-dialog"));
   renderAll();
   showToast(existing ? "这笔数据已更新。" : "已记下，月历也会更新。");
 }
@@ -927,13 +1041,13 @@ function deleteQuickTrace() {
   const trace = activeQuickTraceId ? quickTraceById(activeQuickTraceId) : null;
   if (!trace || !window.confirm("删除这笔数据？原始文字记录不会受影响。")) return;
   if (trace.source === "memo" && trace.memoId) {
-    $("#quick-dialog").close();
+    closeDialog($("#quick-dialog"));
     setMemoCompleted(trace.memoId, false);
     return;
   }
   state.traces = state.traces.filter((item) => item.id !== trace.id);
   persistState();
-  $("#quick-dialog").close();
+  closeDialog($("#quick-dialog"));
   renderAll();
   showToast("这笔数据已删除。");
 }
@@ -1191,7 +1305,7 @@ function savePriming(event) {
   if (existing) state.primings = state.primings.map((item) => item.id === existing.id ? value : item);
   else state.primings.push(value);
   persistState();
-  $("#priming-dialog").close();
+  closeDialog($("#priming-dialog"));
   renderAll();
   showToast(existing ? "行动线已更新。" : "行动线已经留下。");
 }
@@ -1201,7 +1315,7 @@ function deletePriming() {
   if (!priming || !window.confirm("删除这次预演？Daily Memo 和原始记录不会受影响。")) return;
   state.primings = state.primings.filter((item) => item.id !== priming.id);
   persistState();
-  $("#priming-dialog").close();
+  closeDialog($("#priming-dialog"));
   renderAll();
   showToast("这次预演已删除。");
 }
@@ -1513,7 +1627,7 @@ async function importBackupFile(file) {
     await storageWriteQueue;
     renderAll();
     renderBackupStatus();
-    $("#backup-dialog").close();
+    closeDialog($("#backup-dialog"));
     showToast(`已合并 ${incomingNotes} 条原始记录${incomingMemos ? `和 ${incomingMemos} 条 Memo` : ""}。`);
   } catch (error) {
     showToast(error?.message || "备份导入失败。", true);
@@ -1524,7 +1638,7 @@ async function importBackupFile(file) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const register = () => navigator.serviceWorker.register("./sw.js?v=20260803-v21-loop").catch(() => {});
+  const register = () => navigator.serviceWorker.register("./sw.js?v=20260805-v211-iphone").catch(() => {});
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }
@@ -1591,7 +1705,7 @@ function bindEvents() {
     if (action === "complete" && priming.memoId) setMemoCompleted(priming.memoId, true);
   });
   $("#priming-form").addEventListener("submit", savePriming);
-  $("#close-priming-dialog").addEventListener("click", () => $("#priming-dialog").close());
+  $("#close-priming-dialog").addEventListener("click", () => closeDialog($("#priming-dialog")));
   $("#delete-priming").addEventListener("click", deletePriming);
   $("#priming-memo-select").addEventListener("change", (event) => {
     const memo = memoById(event.target.value);
@@ -1607,7 +1721,7 @@ function bindEvents() {
     renderQuickChoices();
   });
   $("#quick-form").addEventListener("submit", saveQuickTrace);
-  $("#close-quick-dialog").addEventListener("click", () => $("#quick-dialog").close());
+  $("#close-quick-dialog").addEventListener("click", () => closeDialog($("#quick-dialog")));
   $("#delete-quick-trace").addEventListener("click", deleteQuickTrace);
   $("#toggle-quick-more").addEventListener("click", () => {
     const expanded = $("#toggle-quick-more").getAttribute("aria-expanded") === "true";
@@ -1641,7 +1755,7 @@ function bindEvents() {
     renderTraceChoices();
   });
   $("#trace-form").addEventListener("submit", (event) => { event.preventDefault(); saveTracesForActiveNote(); });
-  $("#close-trace-dialog").addEventListener("click", () => $("#trace-dialog").close());
+  $("#close-trace-dialog").addEventListener("click", () => closeDialog($("#trace-dialog")));
   $("#remove-note-traces").addEventListener("click", removeTracesForActiveNote);
   $("#toggle-more-trackers").addEventListener("click", () => {
     const expanded = $("#toggle-more-trackers").getAttribute("aria-expanded") === "true";
@@ -1649,21 +1763,32 @@ function bindEvents() {
     $("#more-tracker-choices").hidden = expanded;
   });
 
-  $("#previous-month").addEventListener("click", () => {
-    calendarMonth = shiftMonth(calendarMonth, -1);
-    selectedCalendarDate = firstDateOfMonth(calendarMonth);
-    renderMonth();
-  });
-  $("#next-month").addEventListener("click", () => {
-    calendarMonth = shiftMonth(calendarMonth, 1);
-    selectedCalendarDate = firstDateOfMonth(calendarMonth);
-    renderMonth();
-  });
+  $("#previous-month").addEventListener("click", () => changeCalendarMonth(-1));
+  $("#next-month").addEventListener("click", () => changeCalendarMonth(1));
   $("#current-month").addEventListener("click", () => {
     calendarMonth = monthKey(todayKey());
     selectedCalendarDate = todayKey();
     renderMonth();
   });
+  const calendarSection = $(".calendar-section");
+  calendarSection.addEventListener("click", (event) => {
+    if (!suppressCalendarClick) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressCalendarClick = false;
+  }, true);
+  bindHorizontalSwipe(calendarSection, (direction) => changeCalendarMonth(direction), {
+    visual: $("#calendar-grid"),
+    onCommit: () => {
+      suppressCalendarClick = true;
+      window.setTimeout(() => { suppressCalendarClick = false; }, 0);
+    }
+  });
+  bindHorizontalSwipe($(".selected-day"), (direction) => changeSelectedCalendarDate(direction), {
+    visual: $("#selected-day-content"),
+    ignoreInteractive: true
+  });
+
   $("#calendar-grid").addEventListener("click", (event) => {
     const day = event.target.closest("[data-calendar-date]");
     if (!day) return;
@@ -1672,6 +1797,8 @@ function bindEvents() {
     renderMonth();
     if (window.innerWidth <= 720) requestAnimationFrame(() => $(".selected-day").scrollIntoView({ block: "start", behavior: "smooth" }));
   });
+  $("#previous-day").addEventListener("click", () => changeSelectedCalendarDate(-1));
+  $("#next-day").addEventListener("click", () => changeSelectedCalendarDate(1));
   $("#open-selected-day").addEventListener("click", () => {
     activeDate = selectedCalendarDate;
     resetComposer();
@@ -1680,8 +1807,8 @@ function bindEvents() {
   });
 
   $("#manage-trackers-month").addEventListener("click", () => openTrackerManager(calendarMonth));
-  $("#close-tracker-dialog").addEventListener("click", () => $("#tracker-dialog").close());
-  $("#finish-tracker-management").addEventListener("click", () => $("#tracker-dialog").close());
+  $("#close-tracker-dialog").addEventListener("click", () => closeDialog($("#tracker-dialog")));
+  $("#finish-tracker-management").addEventListener("click", () => closeDialog($("#tracker-dialog")));
   $("#active-tracker-list").addEventListener("click", (event) => {
     const row = event.target.closest("[data-active-tracker]");
     const action = event.target.closest("[data-manager-action]")?.dataset.managerAction;
@@ -1701,8 +1828,8 @@ function bindEvents() {
   $("#new-tracker-mode").addEventListener("change", (event) => { $("#new-tracker-unit-label").hidden = event.target.value !== "quantity"; });
   $("#new-tracker-form").addEventListener("submit", createCustomTracker);
   $("#open-backup").addEventListener("click", openBackupDialog);
-  $("#close-backup-dialog").addEventListener("click", () => $("#backup-dialog").close());
-  $("#finish-backup").addEventListener("click", () => $("#backup-dialog").close());
+  $("#close-backup-dialog").addEventListener("click", () => closeDialog($("#backup-dialog")));
+  $("#finish-backup").addEventListener("click", () => closeDialog($("#backup-dialog")));
   $("#download-backup").addEventListener("click", downloadFullBackup);
   $("#export-month").addEventListener("click", downloadMonth);
   $("#choose-backup").addEventListener("click", () => $("#backup-file-input").click());
