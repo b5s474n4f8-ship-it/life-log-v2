@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "life-log-sync",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-12",
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGIN": "https://b5s474n4f8-ship-it.github.io"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "life-log-sync-db",
+      "database_id": "PLACEHOLDER_CREATED_BY_SETUP"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

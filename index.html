@@ -10,10 +10,10 @@
   <meta name="apple-mobile-web-app-title" content="生命力日志" />
   <meta name="format-detection" content="telephone=no" />
   <title>生命力日志</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260805-v211-iphone" />
-  <link rel="icon" href="./mark.svg?v=20260805-v211-iphone" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260805-v211-iphone" />
-  <link rel="stylesheet" href="./styles.css?v=20260805-v211-iphone" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260812-v220-sync" />
+  <link rel="icon" href="./mark.svg?v=20260812-v220-sync" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260812-v220-sync" />
+  <link rel="stylesheet" href="./styles.css?v=20260812-v220-sync" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
@@ -30,8 +30,8 @@
         <button class="view-tab" type="button" data-view-target="month" aria-selected="false">月历</button>
       </nav>
 
-      <button class="header-command" id="open-backup" type="button" title="备份与导出">
-        <span aria-hidden="true">↓</span><span>备份</span>
+      <button class="header-command" id="open-backup" type="button" title="同步与导出">
+        <span class="header-sync-mark" id="header-sync-mark" aria-hidden="true"></span><span>同步</span>
       </button>
     </div>
   </header>
@@ -269,9 +269,34 @@
   <dialog class="sheet-dialog backup-dialog" id="backup-dialog" aria-labelledby="backup-dialog-title">
     <div class="dialog-shell">
       <header class="dialog-header">
-        <div><p class="eyebrow">保存在你手里</p><h2 id="backup-dialog-title">备份与导出</h2></div>
+        <div><p class="eyebrow">本机先存，联网同步</p><h2 id="backup-dialog-title">同步与导出</h2></div>
         <button class="icon-button close-button" id="close-backup-dialog" type="button" aria-label="关闭" title="关闭">×</button>
       </header>
+
+      <section class="cloud-status" id="cloud-status" aria-live="polite">
+        <span class="cloud-status-mark" aria-hidden="true"></span>
+        <div class="cloud-status-copy">
+          <strong id="cloud-status-title">正在检查同步状态</strong>
+          <p id="cloud-status-copy">本机记录不受影响。</p>
+        </div>
+        <button class="inline-command" id="sync-now" type="button" hidden>立即同步</button>
+      </section>
+
+      <form class="sync-connect" id="sync-connect-form" hidden>
+        <p>只需连接一次。以后每次保存都会在后台同步，Codex 也会从同一份记录开始工作。</p>
+        <label class="sync-token-field">私人同步口令
+          <input id="sync-token" name="sync-token" type="password" autocomplete="off" minlength="32" required />
+        </label>
+        <div class="sync-connect-actions">
+          <button class="primary-button" type="submit">连接同步</button>
+        </div>
+        <p class="sync-form-note" id="sync-form-note">口令只保存在这台手机，不会写入公开网页。</p>
+      </form>
+
+      <div class="sync-account" id="sync-account" hidden>
+        <span id="sync-account-copy">私人同步已连接</span>
+        <button class="inline-command" id="disconnect-sync" type="button">断开这台设备</button>
+      </div>
 
       <div class="storage-status" id="storage-status">
         <span class="storage-status-mark" aria-hidden="true"></span>
@@ -284,7 +309,7 @@
       <div class="backup-action-list">
         <button class="backup-action" id="download-backup" type="button">
           <span aria-hidden="true">↓</span>
-          <span><strong>备份全部记录</strong><small>JSON，可用于完整恢复</small></span>
+          <span><strong>下载应急备份</strong><small>JSON，用于离线留存或完整恢复</small></span>
         </button>
         <button class="backup-action" id="export-month" type="button">
           <span aria-hidden="true">文</span>
@@ -298,11 +323,11 @@
       </div>
 
       <p class="backup-meta" id="last-backup-copy">尚未在这台设备上导出完整备份。</p>
-      <p class="privacy-note">记录只保存在当前设备；发布网页不包含你的私人内容。</p>
+      <p class="privacy-note" id="privacy-note">发布网页不包含你的私人内容；连接后，记录会保存到受私人同步口令保护的云端空间。</p>
 
       <section class="context-handoff" aria-labelledby="context-handoff-title">
-        <strong id="context-handoff-title">发给 All-in-Context</strong>
-        <p>使用同一份完整 JSON，发送后说“整合这份 Life Log”。系统只处理新增或修改内容，核心文档回写前会先让你确认一次。</p>
+        <strong id="context-handoff-title">交给 Codex</strong>
+        <p>连接云端后，不再需要导出或发送文件。涉及 Life Log 的任务开始前，Codex 会先读取最新同步记录。</p>
       </section>
 
       <footer class="dialog-actions single-action">
@@ -311,7 +336,8 @@
     </div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=20260805-v211-iphone" defer></script>
+  <script src="./sync-config.js?v=20260812-v220-sync"></script>
+  <script src="./app.js?v=20260812-v220-sync" defer></script>
 </body>
 </html>
 

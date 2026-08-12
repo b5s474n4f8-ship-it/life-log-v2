@@ -1,11 +1,12 @@
-const CACHE_NAME = "life-log-calendar-20260805-v211-iphone";
+const CACHE_NAME = "life-log-calendar-20260812-v220-sync";
 const PRECACHE = [
   "./",
   "./index.html",
-  "./styles.css?v=20260805-v211-iphone",
-  "./app.js?v=20260805-v211-iphone",
-  "./manifest.webmanifest?v=20260805-v211-iphone",
-  "./mark.svg?v=20260805-v211-iphone",
+  "./styles.css?v=20260812-v220-sync",
+  "./sync-config.js?v=20260812-v220-sync",
+  "./app.js?v=20260812-v220-sync",
+  "./manifest.webmanifest?v=20260812-v220-sync",
+  "./mark.svg?v=20260812-v220-sync",
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png"
@@ -48,10 +49,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === "navigate") {
-    event.respondWith(
-      networkFirst(event.request)
-        .then((response) => response || caches.match("./index.html"))
-    );
+    event.respondWith(networkFirst(event.request).then((response) => response || caches.match("./index.html")));
     return;
   }
 

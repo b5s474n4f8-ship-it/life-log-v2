@@ -1,67 +1,68 @@
-# 生命力日志 V2.1.1 · 2026-08-05
+# 生命力日志 V2.2 · 自动同步候选版
 
-本地优先的生活记录与月历 PWA。它保留自由原文作为主入口，也允许在需要时留下少量可统计数据；不需要账号、云数据库或 AI。
+手机作为唯一输入端的本地优先 Life Log PWA。自由原文、Daily Memo、按需预演、快速数据和月历保持原有流程；新增私人云端自动同步与 Codex 只读拉取。
 
-## 这一版的日常闭环
+## 日常闭环
 
-```text
-Daily Memo：今天要记得什么
-        ↓（需要时）
-预演一下：把困难任务的过程说清楚
+    iPhone 随时记录
         ↓
-完成：勾选 Memo，自动成为当天和当月的“完成”痕迹
+    先写入 IndexedDB 与 localStorage
+        ↓
+    联网时后台同步完整当前状态
+        ↓
+    Codex 在 Life Log 任务开始前只读拉取最新副本
 
-随时想到什么 → 追加原文
-想留下可统计事实 → ＋ 数据 → 月历与月度小结
-```
+- 手机是唯一写入端，不把多设备同时编辑引入日常流程。
+- 保存不依赖网络；离线时继续记录，恢复联网、回到前台或再次打开时自动补传。
+- 新装或清空本地数据后，连接同一私人同步空间即可恢复云端记录。
+- 云端同步失败不会阻断本机保存，界面只显示温和状态。
+- 手动 JSON 与 Markdown 导出仍保留，作为应急备份和可读档案。
 
-- **原文**：事件、想法、感悟、启发、灵感和规划都可以直接写，不需要先分类。
-- **Daily Memo**：轻量 To Do / 当日备忘，不扩成任务管理系统。
-- **按需预演**：只在一天开始或面对困难任务时使用；不是每日必做。
-- **完成**：勾选 Memo 后自动进入月历，可随时撤销，不显示 streak、完成率或目标缺口。
-- **快速数据**：灵修、睡眠、身体、庶务、运动、阅读、社交、完成、梦境；一次只记一类。
-- **月历**：显示主动留下的痕迹，并形成温和的月度统计。空白表示未知，不按零处理。
-- **iPhone 浏览**：动态表单保持整页比例稳定；月历网格可连续左右滑月，选中日期的详情可逐日左右滑动，前后按钮仍可使用。
+## 私有同步
 
-## 保存与备份
+- 前端部署在 GitHub Pages。
+- 同步 API 使用 Cloudflare Worker，数据写入 D1。
+- Worker 只接受配置的 GitHub Pages 来源和私人 Bearer 口令。
+- 私人口令使用 Cloudflare Secret 保存，不写入 GitHub。
+- iPhone 通过一次性 #sync=... 激活链接连接；页面读取后立即从地址栏移除。
+- Codex 通过本机私密配置只读拉取，生成原子更新的 latest 文件和有变化时的快照。
+- 当前架构按“一个手机写、Codex 读”设计，不支持多个设备同时写入。
 
-- 日常数据保存在当前设备的 IndexedDB，并同步一份 localStorage 兼容镜像。
-- 完整备份格式已升级为 v3，包含原文、Daily Memo、预演、月历数据和项目设置。
-- v1 / v2 旧备份可以直接合并导入；同一 ID 只保留更新较晚的一份。
-- “备份全部记录”导出的 JSON 用于跨设备恢复，也是发送给 All-in-Context 的唯一输入文件。
-- 发送备份后说 **“整合这份 Life Log”**，系统会先识别增量，再在核心文档回写前进行一次确认。
-- 建议每周或重要记录后导出一次完整备份。
+完整的一次性设置见 CLOUD_SYNC_SETUP.md。
 
-## 发布到 GitHub Pages
+## 目录
 
-线上地址：<https://b5s474n4f8-ship-it.github.io/life-log-v2/>
+- index.html、styles.css、app.js：iPhone PWA
+- sync-config.js：公开 Worker URL，不含口令
+- sw.js：版本化离线缓存
+- cloud-sync：Worker、D1 migration 与 Wrangler 配置
+- scripts/setup-cloud-sync.ps1：一次性云端部署
+- scripts/authorize-cloudflare.cmd：一次性浏览器授权
+- scripts/pull-cloud-backup.mjs：Codex 只读拉取
+- scripts/test-*.mjs：协议、恢复、离线与 iPhone 交互测试
 
-2026-08-05 已发布 V2.1.1 应用提交 `ec97d62`；发布前版本保留在分支 `archive/pre-v211-iphone-20260805`。
+## 自动读取
 
-1. 先在当前线上版本导出一份完整 JSON 备份。
-2. 将本目录中的发布文件上传到 `life-log-v2` 仓库根目录，覆盖同名代码文件。
-3. 在 GitHub 仓库 `Settings > Pages` 中选择 `Deploy from a branch`。
-4. Branch 选择 `main`，Folder 选择 `/ (root)`，保存。
-5. 发布完成后用 iPhone Safari 打开 Pages 地址并刷新。
-6. 若仍显示旧界面，删除旧主屏幕图标和 Safari 对该网址的旧页面，再重新“添加到主屏幕”。
-7. 进入“备份”导入原 JSON，核对原文数量、日期范围和月份。
+完成一次性设置后，Codex 在涉及 Life Log 的任务开始前运行：
 
-## 数据与隐私
+    & "C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" "D:\CodexProjects\deploy-life-log-v2-20260805\scripts\pull-cloud-backup.mjs"
 
-- 正式网页和 GitHub 仓库不包含私人记录。
-- 更换网址、浏览器或设备前必须先导出 JSON；浏览器数据与网址绑定。
-- 导入采用合并方式，不会主动清空手机现有记录。
-- 私人 Life Log 原始备份归档在 `D:\LifeLog-Private-Archive`，不写入公开仓库。
+最新私密副本位于：
 
-## 本地验证
+    D:\LifeLog-Private-Archive\cloud\life-log-cloud-latest.json
 
-2026-08-03 已完成：
+该目录不属于公开仓库。
 
-- 390×844 与 375×812 iPhone 视口交互测试，无横向溢出。
-- Daily Memo → 按需预演 → 完成 → 月历统计闭环。
-- 庶务快速记录、自由原文追加、刷新后持久化。
-- v3 JSON 导出及 v1 备份导入；33 条旧原文、12 个记录日全部保留。
-- Service Worker 离线启动测试。
-- 可见按钮触控区域至少 44×44px。
+## 验证
 
-2026-08-05 已完成 V2.1.1 GitHub Pages 线上验证：390×844 与 375×812 均无横向裁切或标题重叠，动态输入框不低于 16px，连续滑月、逐日跨月、记录刷新持久化、Service Worker 控制和断网重开均通过。用户真实 iPhone 上的缩放与手势体验仍需本人确认，不能由自动化测试替代。
+2026-08-12 已在本地完成：
+
+- Worker Bearer 鉴权、来源限制和 CORS。
+- 约 45 万字符（含 emoji）记录的分块保存与无损恢复。
+- iPhone 390×844 激活、保存、自动上传、离线继续记录、联网补传。
+- 新设备空数据从云端恢复。
+- 同步输入字号不低于 16px，页面无横向溢出，主要触控目标不低于 44px。
+- Codex latest 文件原子更新；内容无变化时不重复生成快照。
+- 源码语法检查与私密内容扫描。
+
+线上 V2.1.1 在云端部署和实机激活完成前保持不变，避免把未配置的同步入口发布给日常使用。

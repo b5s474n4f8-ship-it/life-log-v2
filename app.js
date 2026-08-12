@@ -7,6 +7,10 @@ const BACKUP_FORMAT = "life-log-calendar-backup";
 const BACKUP_VERSION = 3;
 const STATE_VERSION = 2;
 const ARTIFACT_LINEAGE = "life-log-v2-evolved";
+const SYNC_SESSION_KEY = "life-log-cloud-session-v1";
+const SYNC_CONFIG_RAW = window.LIFE_LOG_SYNC_CONFIG || {};
+const SYNC_CONFIG = { workerUrl: String(SYNC_CONFIG_RAW.workerUrl || "").replace(/\/+$/, "") };
+const SYNC_CONFIGURED = /^https:\/\//.test(SYNC_CONFIG.workerUrl);
 const DEFAULT_FOCUS = ["faith", "sleep", "body", "care", "movement", "reading", "people", "completed", "dream"];
 const QUICK_TRACKER_IDS = ["faith", "sleep", "body", "care", "movement", "reading", "people", "completed", "dream"];
 
@@ -59,6 +63,15 @@ let managerIds = [];
 let toastTimer = null;
 let draftTimer = null;
 let suppressCalendarClick = false;
+const cloudSync = {
+  configured: SYNC_CONFIGURED,
+  session: null,
+  status: SYNC_CONFIGURED ? "disconnected" : "unconfigured",
+  error: "",
+  timer: null,
+  inFlight: null,
+  pending: false
+};
 const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function makeId(prefix = "id") {
@@ -267,7 +280,7 @@ async function initializeState() {
   } catch {}
 }
 
-function persistState(message = "已保存到本机") {
+function persistState(message = "已保存到本机", options = {}) {
   state.meta = {
     ...(state.meta || {}),
     updatedAt: new Date().toISOString()
@@ -287,6 +300,7 @@ function persistState(message = "已保存到本机") {
     });
   const status = document.querySelector("#save-state");
   if (status) status.textContent = localSaved ? message : "正在尝试本机保存";
+  if (options.sync !== false) scheduleCloudSync(message.includes("草稿") ? 4500 : 900);
 }
 
 function trackerById(id) {
@@ -1519,6 +1533,276 @@ function downloadFullBackup() {
   showToast("全部记录已备份。");
 }
 
+function hasMeaningfulState(value = state) {
+  return ["notes", "memos", "primings", "traces"].some((key) => Array.isArray(value?.[key]) && value[key].length)
+    || Object.values(value?.drafts || {}).some((draft) => String(draft || "").trim());
+}
+
+function tokenFromActivationLink() {
+  if (!cloudSync.configured || !location.hash.startsWith("#")) return "";
+  const params = new URLSearchParams(location.hash.slice(1));
+  const token = String(params.get("sync") || "");
+  if (token.length < 32) return "";
+  history.replaceState(null, "", location.pathname + location.search);
+  return token;
+}
+
+function loadCloudSession() {
+  if (!cloudSync.configured) return null;
+  try {
+    const token = tokenFromActivationLink();
+    const saved = token ? { token, lastSyncedAt: null } : JSON.parse(localStorage.getItem(SYNC_SESSION_KEY) || "null");
+    if (!saved?.token) return null;
+    cloudSync.session = saved;
+    localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(saved));
+    cloudSync.status = navigator.onLine ? "connected" : "offline";
+    return saved;
+  } catch {
+    localStorage.removeItem(SYNC_SESSION_KEY);
+    return null;
+  }
+}
+
+function storeCloudSession(token, previous = cloudSync.session || {}) {
+  const session = { token, lastSyncedAt: previous.lastSyncedAt || null };
+  if (session.token.length < 32) throw new Error("同步口令无效");
+  cloudSync.session = session;
+  localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+function clearCloudSession() {
+  cloudSync.session = null;
+  cloudSync.pending = false;
+  clearTimeout(cloudSync.timer);
+  localStorage.removeItem(SYNC_SESSION_KEY);
+}
+
+async function parseCloudResponse(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+async function cloudDataRequest(path, options = {}) {
+  if (!cloudSync.configured || !cloudSync.session?.token) throw new Error("尚未连接云端");
+  const response = await fetch(SYNC_CONFIG.workerUrl + path, {
+    ...options,
+    headers: {
+      Authorization: "Bearer " + cloudSync.session.token,
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    cache: "no-store"
+  });
+  const payload = await parseCloudResponse(response);
+  if (!response.ok) {
+    const error = new Error(payload?.message || "云端暂时不可用");
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+function setCloudStatus(status, error = "") {
+  cloudSync.status = status;
+  cloudSync.error = error;
+  renderCloudStatus();
+}
+
+function renderCloudStatus() {
+  const container = $("#cloud-status");
+  if (!container) return;
+  const connected = Boolean(cloudSync.session);
+  const lastSynced = displayDateTime(cloudSync.session?.lastSyncedAt);
+  container.className = "cloud-status is-" + cloudSync.status;
+  $("#header-sync-mark").className = "header-sync-mark is-" + cloudSync.status;
+  $("#sync-connect-form").hidden = !cloudSync.configured || connected;
+  $("#sync-account").hidden = !connected;
+  $("#sync-now").hidden = !connected || cloudSync.status === "syncing";
+
+  const states = {
+    unconfigured: ["自动同步尚未启用", "当前仍会可靠地保存在这台手机上。"],
+    disconnected: ["连接一次，之后自动同步", "输入私人同步口令，或打开一次激活链接。"],
+    connecting: ["正在连接", "请稍候，本机记录不会受到影响。"],
+    connected: ["云端已连接", lastSynced ? "上次同步：" + lastSynced : "准备同步现有记录。"],
+    syncing: ["正在同步", "你可以继续记录，不需要停在这里。"],
+    waiting: ["已保存本机，等待同步", navigator.onLine ? "稍后会自动重试。" : "恢复网络后会自动补传。"],
+    offline: ["当前离线，记录已保存在本机", "恢复网络后会自动补传。"],
+    synced: ["已自动同步", lastSynced ? "最近同步：" + lastSynced : "云端已有最新记录。"],
+    error: ["同步暂时未完成", cloudSync.error || "记录已在本机保存，稍后会自动重试。"]
+  };
+  const [title, copy] = states[cloudSync.status] || states.disconnected;
+  $("#cloud-status-title").textContent = title;
+  $("#cloud-status-copy").textContent = copy;
+
+  const saveState = $("#save-state");
+  if (saveState && connected) {
+    if (cloudSync.status === "synced") saveState.textContent = "已保存 · 已同步";
+    if (["waiting", "offline", "error"].includes(cloudSync.status)) saveState.textContent = "已保存本机 · 等待同步";
+    if (cloudSync.status === "syncing") saveState.textContent = "已保存本机 · 正在同步";
+  }
+}
+
+async function fetchCloudStateRow() {
+  return cloudDataRequest("/state", { method: "GET" });
+}
+
+async function pushCloudSnapshot(snapshot, keepalive = false) {
+  await cloudDataRequest("/state", {
+    method: "PUT",
+    keepalive,
+    body: JSON.stringify({
+      state: snapshot,
+      schemaVersion: STATE_VERSION,
+      deviceUpdatedAt: snapshot?.meta?.updatedAt || new Date().toISOString()
+    })
+  });
+  cloudSync.session.lastSyncedAt = new Date().toISOString();
+  localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(cloudSync.session));
+}
+
+async function replaceLocalStateFromCloud(remoteState) {
+  state = normalizeState(remoteState);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+  storageWriteQueue = storageWriteQueue.then(() => writeStateToDatabase(state)).catch(() => {});
+  await storageWriteQueue;
+  editingNoteId = null;
+  editingMemoId = null;
+  resetComposer();
+  resetMemoComposer();
+  renderAll();
+}
+
+async function reconcileCloudState() {
+  if (!cloudSync.configured || !cloudSync.session) return;
+  if (!navigator.onLine) {
+    cloudSync.pending = true;
+    setCloudStatus("offline");
+    return;
+  }
+  setCloudStatus("syncing");
+  try {
+    const remote = await fetchCloudStateRow();
+    const localMeaningful = hasMeaningfulState(state);
+    if (!remote?.state) {
+      if (localMeaningful) await pushCloudSnapshot(JSON.parse(JSON.stringify(state)));
+    } else {
+      const remoteMeaningful = hasMeaningfulState(remote.state);
+      const localUpdated = Date.parse(state.meta?.updatedAt || 0) || 0;
+      const remoteUpdated = Date.parse(remote.deviceUpdatedAt || remote.state?.meta?.updatedAt || 0) || 0;
+      if (!localMeaningful && remoteMeaningful) {
+        await replaceLocalStateFromCloud(remote.state);
+        cloudSync.session.lastSyncedAt = new Date().toISOString();
+        localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(cloudSync.session));
+      } else if (localMeaningful && !remoteMeaningful) {
+        await pushCloudSnapshot(JSON.parse(JSON.stringify(state)));
+      } else if (localMeaningful && remoteMeaningful && remoteUpdated > localUpdated) {
+        await replaceLocalStateFromCloud(remote.state);
+        cloudSync.session.lastSyncedAt = new Date().toISOString();
+        localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(cloudSync.session));
+      } else if (localMeaningful && remoteMeaningful && localUpdated > remoteUpdated) {
+        await pushCloudSnapshot(JSON.parse(JSON.stringify(state)));
+      } else {
+        cloudSync.session.lastSyncedAt = new Date().toISOString();
+        localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(cloudSync.session));
+      }
+    }
+    cloudSync.pending = false;
+    setCloudStatus("synced");
+  } catch (error) {
+    if (error?.status === 401) clearCloudSession();
+    cloudSync.pending = Boolean(cloudSync.session);
+    if (!navigator.onLine) setCloudStatus("offline");
+    else if (!cloudSync.session) setCloudStatus("disconnected");
+    else setCloudStatus("error", "记录已在本机保存，稍后会自动重试。");
+  }
+}
+
+function scheduleCloudSync(delay = 900) {
+  if (!cloudSync.configured || !cloudSync.session) {
+    renderCloudStatus();
+    return;
+  }
+  cloudSync.pending = true;
+  clearTimeout(cloudSync.timer);
+  if (!navigator.onLine) {
+    setCloudStatus("offline");
+    return;
+  }
+  setCloudStatus("waiting");
+  cloudSync.timer = window.setTimeout(() => flushCloudSync(), delay);
+}
+
+async function flushCloudSync(keepalive = false) {
+  if (!cloudSync.configured || !cloudSync.session || !cloudSync.pending) return;
+  if (!navigator.onLine) {
+    setCloudStatus("offline");
+    return;
+  }
+  if (cloudSync.inFlight) return cloudSync.inFlight;
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const targetUpdatedAt = snapshot.meta?.updatedAt;
+  cloudSync.pending = false;
+  setCloudStatus("syncing");
+  cloudSync.inFlight = pushCloudSnapshot(snapshot, keepalive)
+    .then(() => {
+      setCloudStatus("synced");
+      if (state.meta?.updatedAt !== targetUpdatedAt) scheduleCloudSync(500);
+    })
+    .catch((error) => {
+      if (error?.status === 401) clearCloudSession();
+      cloudSync.pending = Boolean(cloudSync.session);
+      setCloudStatus(cloudSync.session ? (navigator.onLine ? "error" : "offline") : "disconnected", "记录已在本机保存，稍后会自动重试。");
+    })
+    .finally(() => {
+      cloudSync.inFlight = null;
+    });
+  return cloudSync.inFlight;
+}
+
+async function connectCloudAccount(event) {
+  event.preventDefault();
+  const token = $("#sync-token").value.trim();
+  if (token.length < 32) {
+    $("#sync-form-note").textContent = "这个同步口令不完整。";
+    return;
+  }
+  setCloudStatus("connecting");
+  $("#sync-form-note").textContent = "正在连接……";
+  try {
+    storeCloudSession(token);
+    await reconcileCloudState();
+    if (!cloudSync.session) throw new Error("同步口令不正确");
+    $("#sync-token").value = "";
+    $("#sync-form-note").textContent = "口令只保存在这台手机，不会写入公开网页。";
+    showToast("已经连接。以后会自动同步。");
+  } catch {
+    clearCloudSession();
+    setCloudStatus("disconnected");
+    $("#sync-form-note").textContent = "没有连接成功，请检查同步口令。";
+  }
+}
+
+function disconnectCloudAccount() {
+  if (!window.confirm("断开后，这台手机会停止同步；本机和云端已有记录都不会删除。")) return;
+  clearCloudSession();
+  setCloudStatus(cloudSync.configured ? "disconnected" : "unconfigured");
+  showToast("这台设备已断开，记录仍保存在本机。");
+}
+
+async function initializeCloudSync() {
+  loadCloudSession();
+  renderCloudStatus();
+  if (cloudSync.session) await reconcileCloudState();
+}
+
 function displayDateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -1638,7 +1922,7 @@ async function importBackupFile(file) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const register = () => navigator.serviceWorker.register("./sw.js?v=20260805-v211-iphone").catch(() => {});
+  const register = () => navigator.serviceWorker.register("./sw.js?v=20260812-v220-sync").catch(() => {});
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }
@@ -1834,8 +2118,32 @@ function bindEvents() {
   $("#export-month").addEventListener("click", downloadMonth);
   $("#choose-backup").addEventListener("click", () => $("#backup-file-input").click());
   $("#backup-file-input").addEventListener("change", (event) => importBackupFile(event.target.files?.[0]));
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkDateChange(); });
-  window.setInterval(checkDateChange, 60000);
+  $("#sync-connect-form").addEventListener("submit", connectCloudAccount);
+  $("#disconnect-sync").addEventListener("click", disconnectCloudAccount);
+  $("#sync-now").addEventListener("click", () => reconcileCloudState());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      if (draftTimer) {
+        clearTimeout(draftTimer);
+        persistState("草稿已保存");
+      }
+      flushCloudSync(true);
+      return;
+    }
+    checkDateChange();
+    if (cloudSync.session) reconcileCloudState();
+  });
+  window.addEventListener("pagehide", () => flushCloudSync(true));
+  window.addEventListener("online", () => {
+    if (cloudSync.session) reconcileCloudState();
+  });
+  window.addEventListener("offline", () => {
+    if (cloudSync.session) setCloudStatus("offline");
+  });
+  window.setInterval(() => {
+    checkDateChange();
+    if (cloudSync.pending && document.visibilityState === "visible") flushCloudSync();
+  }, 60000);
 }
 
 async function init() {
@@ -1845,6 +2153,7 @@ async function init() {
   switchView("today", { scrollToEnd: true });
   registerServiceWorker();
   requestPersistentStorage();
+  await initializeCloudSync();
 }
 
 init().catch(() => {

@@ -2,3 +2,9 @@ life-log-private-import*.json
 *private-history*.json
 *_qa*
 *.zip
+.wrangler/
+.dev.vars*
+.env*
+cloudflare-deploy-secrets.json
+life-log-cloud-config.json
+life-log-iphone-activation.txt
