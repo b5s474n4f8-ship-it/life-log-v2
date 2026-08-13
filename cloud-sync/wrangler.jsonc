@@ -11,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "life-log-sync-db",
-      "database_id": "PLACEHOLDER_CREATED_BY_SETUP"
+      "database_id": "2ff281e7-5032-4deb-a91b-c5c3bfcc4482"
     }
   ],
   "observability": {

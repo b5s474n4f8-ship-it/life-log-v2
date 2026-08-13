@@ -82,7 +82,7 @@ try {
   const plainPage = await plain.newPage();
   await plainPage.goto(appUrl);
   await plainPage.click("#open-backup");
-  assert.equal(await plainPage.locator("#sync-connect-form").isHidden(), true);
+  assert.equal(await plainPage.locator("#sync-connect-form").isVisible(), true);
   await plain.close();
 
   const context = await configuredContext();

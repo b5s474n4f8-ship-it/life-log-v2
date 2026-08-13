@@ -80,7 +80,7 @@ try {
   }
   Write-Utf8Json (Join-Path $cloudRoot "wrangler.jsonc") $wrangler
 
-  Invoke-Wrangler d1 migrations apply DB --remote --yes | Out-Null
+  Invoke-Wrangler d1 migrations apply DB --remote | Out-Null
   Write-Utf8Json $secretPath ([ordered]@{ SYNC_TOKEN = $token })
   try {
     $deployOutput = Invoke-Wrangler deploy --secrets-file $secretPath
@@ -93,7 +93,7 @@ try {
   $workerUrl = $urlMatch.Value.TrimEnd("/")
 
   $newline = [Environment]::NewLine
-  $publicConfig = 'window.LIFE_LOG_SYNC_CONFIG = {' + $newline + '  workerUrl: "' + $workerUrl + '"' + $newline + '};' + $newline
+  $publicConfig = 'window.LIFE_LOG_SYNC_CONFIG = window.LIFE_LOG_SYNC_CONFIG || {' + $newline + '  workerUrl: "' + $workerUrl + '"' + $newline + '};' + $newline
   [IO.File]::WriteAllText((Join-Path $repoRoot "sync-config.js"), $publicConfig, (New-Object Text.UTF8Encoding($false)))
 
   $privateConfig = [ordered]@{
