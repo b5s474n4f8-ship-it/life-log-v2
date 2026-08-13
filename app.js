@@ -1538,11 +1538,21 @@ function hasMeaningfulState(value = state) {
     || Object.values(value?.drafts || {}).some((draft) => String(draft || "").trim());
 }
 
+function syncTokenFromValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    const token = String(new URLSearchParams(url.hash.slice(1)).get("sync") || "").trim();
+    if (token.length >= 32) return token;
+  } catch {}
+  return raw.length >= 32 ? raw : "";
+}
+
 function tokenFromActivationLink() {
   if (!cloudSync.configured || !location.hash.startsWith("#")) return "";
-  const params = new URLSearchParams(location.hash.slice(1));
-  const token = String(params.get("sync") || "");
-  if (token.length < 32) return "";
+  const token = syncTokenFromValue(location.href);
+  if (!token) return "";
   history.replaceState(null, "", location.pathname + location.search);
   return token;
 }
@@ -1769,9 +1779,9 @@ async function flushCloudSync(keepalive = false) {
 
 async function connectCloudAccount(event) {
   event.preventDefault();
-  const token = $("#sync-token").value.trim();
-  if (token.length < 32) {
-    $("#sync-form-note").textContent = "这个同步口令不完整。";
+  const token = syncTokenFromValue($("#sync-token").value);
+  if (!token) {
+    $("#sync-form-note").textContent = "请粘贴完整的激活链接，或私人同步口令。";
     return;
   }
   setCloudStatus("connecting");
@@ -1781,7 +1791,7 @@ async function connectCloudAccount(event) {
     await reconcileCloudState();
     if (!cloudSync.session) throw new Error("同步口令不正确");
     $("#sync-token").value = "";
-    $("#sync-form-note").textContent = "口令只保存在这台手机，不会写入公开网页。";
+    $("#sync-form-note").textContent = "链接中的口令只保存在这台手机，不会写入公开网页。";
     showToast("已经连接。以后会自动同步。");
   } catch {
     clearCloudSession();
@@ -1922,7 +1932,7 @@ async function importBackupFile(file) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const register = () => navigator.serviceWorker.register("./sw.js?v=20260812-v220-sync").catch(() => {});
+  const register = () => navigator.serviceWorker.register("./sw.js?v=20260813-v221-recovery").catch(() => {});
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }

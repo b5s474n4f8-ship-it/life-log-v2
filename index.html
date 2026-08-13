@@ -10,10 +10,10 @@
   <meta name="apple-mobile-web-app-title" content="生命力日志" />
   <meta name="format-detection" content="telephone=no" />
   <title>生命力日志</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260812-v220-sync" />
-  <link rel="icon" href="./mark.svg?v=20260812-v220-sync" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260812-v220-sync" />
-  <link rel="stylesheet" href="./styles.css?v=20260812-v220-sync" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260813-v221-recovery" />
+  <link rel="icon" href="./mark.svg?v=20260813-v221-recovery" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260813-v221-recovery" />
+  <link rel="stylesheet" href="./styles.css?v=20260813-v221-recovery" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
@@ -283,9 +283,9 @@
       </section>
 
       <form class="sync-connect" id="sync-connect-form" hidden>
-        <p>只需连接一次。以后每次保存都会在后台同步，Codex 也会从同一份记录开始工作。</p>
-        <label class="sync-token-field">私人同步口令
-          <input id="sync-token" name="sync-token" type="password" autocomplete="off" minlength="32" required />
+        <p>只需连接一次。可直接粘贴私密激活链接；以后每次保存都会在后台同步，Codex 也会从同一份记录开始工作。</p>
+        <label class="sync-token-field">激活链接或私人同步口令
+          <input id="sync-token" name="sync-token" type="password" autocomplete="off" minlength="32" placeholder="粘贴激活链接即可" required />
         </label>
         <div class="sync-connect-actions">
           <button class="primary-button" type="submit">连接同步</button>
@@ -336,8 +336,8 @@
     </div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./sync-config.js?v=20260812-v220-sync"></script>
-  <script src="./app.js?v=20260812-v220-sync" defer></script>
+  <script src="./sync-config.js?v=20260813-v221-recovery"></script>
+  <script src="./app.js?v=20260813-v221-recovery" defer></script>
 </body>
 </html>
 

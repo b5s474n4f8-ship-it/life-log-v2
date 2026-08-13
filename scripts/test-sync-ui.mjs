@@ -85,6 +85,20 @@ try {
   assert.equal(await plainPage.locator("#sync-connect-form").isVisible(), true);
   await plain.close();
 
+  const migrationContext = await configuredContext();
+  const migrationPage = await migrationContext.newPage();
+  await migrationPage.goto(appUrl);
+  await migrationPage.fill("#note-input", "旧图标中的一条记录");
+  await migrationPage.click("#save-note");
+  await migrationPage.click("#open-backup");
+  await migrationPage.fill("#sync-token", workerUrl + "/#sync=" + encodeURIComponent(token));
+  await migrationPage.click("#sync-connect-form button[type=submit]");
+  await migrationPage.waitForFunction(() => document.querySelector("#header-sync-mark")?.classList.contains("is-synced"));
+  assert.equal(cloudState.notes.some((note) => note.text === "旧图标中的一条记录"), true);
+  await migrationContext.close();
+  cloudState = null;
+  putCount = 0;
+
   const context = await configuredContext();
   const page = await context.newPage();
   const errors = [];
