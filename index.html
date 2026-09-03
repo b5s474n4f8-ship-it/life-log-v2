@@ -10,10 +10,10 @@
   <meta name="apple-mobile-web-app-title" content="生命力日志" />
   <meta name="format-detection" content="telephone=no" />
   <title>生命力日志</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260813-v221-recovery" />
-  <link rel="icon" href="./mark.svg?v=20260813-v221-recovery" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260813-v221-recovery" />
-  <link rel="stylesheet" href="./styles.css?v=20260813-v221-recovery" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260903-v230" />
+  <link rel="icon" href="./icon-192.png?v=20260903-v230" type="image/png" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260903-v230" />
+  <link rel="stylesheet" href="./styles.css?v=20260903-v230" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
@@ -45,7 +45,13 @@
             <h1 id="today-title">7月18日</h1>
             <p class="day-line">留下发生过的一点，就够了。</p>
           </div>
-          <button class="text-command" id="return-today" type="button" hidden>回到今天</button>
+          <div class="day-heading-actions">
+            <div class="day-stepper" aria-label="切换记录日期">
+              <button class="icon-button" id="previous-today-day" type="button" aria-label="前一天" title="前一天">‹</button>
+              <button class="icon-button" id="next-today-day" type="button" aria-label="后一天" title="后一天">›</button>
+            </div>
+            <button class="text-command" id="return-today" type="button" hidden>回到今天</button>
+          </div>
         </header>
 
         <div class="history-notice" id="history-notice" hidden>
@@ -53,7 +59,7 @@
           <button type="button" id="history-return">返回今天</button>
         </div>
 
-        <section class="daily-memo" aria-labelledby="daily-memo-title">
+        <section class="daily-memo legacy-daily-tool" aria-labelledby="daily-memo-title">
           <header class="daily-memo-header">
             <div>
               <h2 id="daily-memo-title">Daily Memo</h2>
@@ -70,7 +76,7 @@
           <div class="memo-list" id="memo-list"></div>
         </section>
 
-        <section class="priming-space" id="priming-space" aria-labelledby="priming-space-title" hidden>
+        <section class="priming-space legacy-daily-tool" id="priming-space" aria-labelledby="priming-space-title" hidden>
           <header>
             <div>
               <h2 id="priming-space-title">今日行动线</h2>
@@ -85,6 +91,21 @@
           <div class="note-list" id="note-list"></div>
         </section>
 
+        <section class="core-quick" aria-labelledby="core-quick-title">
+          <div class="core-quick-heading">
+            <h2 id="core-quick-title">顺手记一笔</h2>
+            <span>可选</span>
+          </div>
+          <div class="core-quick-grid">
+            <button type="button" data-core-tracker="sleep">睡眠</button>
+            <button type="button" data-core-tracker="movement">运动</button>
+            <button type="button" data-core-tracker="body">身体</button>
+            <button type="button" data-core-tracker="dream">梦境</button>
+            <button type="button" data-core-tracker="completed">完成</button>
+            <button type="button" data-core-tracker="care">庶务</button>
+          </div>
+        </section>
+
         <form class="composer" id="note-form">
           <label for="note-input">现在想留下什么？</label>
           <textarea id="note-input" rows="3" placeholder="一件事、一个想法、一点感受。先写下来，不需要分类。" spellcheck="true"></textarea>
@@ -92,7 +113,7 @@
             <span class="save-state" id="save-state" role="status" aria-live="polite">保存在本机</span>
             <div class="composer-actions">
               <button class="quiet-button" id="cancel-edit" type="button" hidden>取消编辑</button>
-              <button class="data-button" id="open-quick-log" type="button"><span aria-hidden="true">＋</span><span>数据</span></button>
+              <button class="data-button" id="open-quick-log" type="button"><span aria-hidden="true">···</span><span>更多</span></button>
               <button class="primary-button" id="save-note" type="submit">保存</button>
             </div>
           </div>
@@ -199,10 +220,12 @@
         <div><p class="eyebrow">可选，不补齐</p><h2 id="quick-dialog-title">记一笔数据</h2></div>
         <button class="icon-button close-button" id="close-quick-dialog" type="button" aria-label="关闭" title="关闭">×</button>
       </header>
-      <p class="dialog-intro">只选现在想留下的一类。空白表示没有记录，不代表没有发生。</p>
-      <div class="tracker-choices quick-choices" id="quick-primary-choices"></div>
-      <button class="more-toggle" id="toggle-quick-more" type="button" aria-expanded="false">更多项目</button>
-      <div class="tracker-choices more-choices" id="quick-more-choices" hidden></div>
+      <div class="quick-entry-picker" id="quick-entry-picker">
+        <p class="dialog-intro">只选现在想留下的一类。空白表示没有记录，不代表没有发生。</p>
+        <div class="tracker-choices quick-choices" id="quick-primary-choices"></div>
+        <button class="more-toggle" id="toggle-quick-more" type="button" aria-expanded="false">更多项目</button>
+        <div class="tracker-choices more-choices" id="quick-more-choices" hidden></div>
+      </div>
       <div class="trace-fields" id="quick-fields"></div>
       <footer class="dialog-actions">
         <button class="quiet-button" id="delete-quick-trace" type="button" hidden>删除这笔</button>
@@ -336,8 +359,8 @@
     </div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./sync-config.js?v=20260813-v221-recovery"></script>
-  <script src="./app.js?v=20260813-v221-recovery" defer></script>
+  <script src="./sync-config.js?v=20260903-v230"></script>
+  <script src="./app.js?v=20260903-v230" defer></script>
 </body>
 </html>
 

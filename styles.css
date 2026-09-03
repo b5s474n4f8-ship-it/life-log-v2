@@ -2161,3 +2161,250 @@ input::placeholder {
 @media (prefers-reduced-motion:reduce) {
   .header-sync-mark.is-syncing, .cloud-status.is-syncing .cloud-status-mark { animation:none; }
 }
+
+/* V2.3 calm daily capture */
+.legacy-daily-tool {
+  display: none !important;
+}
+
+#today-view {
+  overflow-x: hidden;
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+}
+
+.today-shell {
+  transform: translate3d(var(--swipe-offset, 0), 0, 0);
+}
+
+.today-shell.is-swiping {
+  will-change: transform;
+}
+
+.day-heading-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.day-heading-actions .day-stepper {
+  display: flex;
+  gap: 6px;
+}
+
+.day-heading-actions .icon-button {
+  border-color: var(--line);
+  color: var(--blue-deep);
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.28;
+}
+
+.core-quick {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.core-quick-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.core-quick-heading h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 720;
+}
+
+.core-quick-heading span {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.core-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.core-quick-grid button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.core-quick-grid button:hover,
+.core-quick-grid button:active {
+  border-color: #8eb6ca;
+  color: var(--blue-deep);
+  background: var(--blue-soft);
+}
+
+.core-quick + .composer {
+  margin-top: 24px;
+}
+
+.choice-field,
+.field-shortcuts {
+  display: grid;
+  gap: 8px;
+}
+
+.choice-field.full,
+.field-shortcuts.full,
+.optional-fields.full {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.choice-options,
+.shortcut-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.choice-options button,
+.shortcut-options button {
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.choice-options button[aria-pressed="true"],
+.shortcut-options button[aria-pressed="true"] {
+  border-color: var(--blue);
+  color: var(--blue-deep);
+  background: var(--blue-soft);
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.optional-fields {
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.optional-fields summary {
+  min-height: 44px;
+  padding-top: 13px;
+  color: var(--blue-deep);
+  font-size: 13px;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.optional-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  padding-top: 5px;
+}
+
+.optional-fields-grid .full {
+  grid-column: 1 / -1;
+}
+
+.quick-dialog.direct-entry .trace-fieldset {
+  margin-top: 6px;
+}
+
+.quick-dialog.direct-entry .trace-fieldset legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .day-heading {
+    gap: 12px;
+  }
+
+  .day-heading-actions .icon-button {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .core-quick-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .core-quick-grid button {
+    font-size: 14px;
+  }
+
+  .choice-options,
+  .shortcut-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .choice-options button,
+  .shortcut-options button {
+    min-width: 0;
+    padding: 0 7px;
+  }
+
+  .choice-options [data-field-choice="八段锦＋拍八虚"] {
+    grid-column: span 2;
+  }
+
+  .optional-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-actions {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 370px) {
+  .day-heading-actions .day-stepper {
+    gap: 2px;
+  }
+
+  .core-quick-grid,
+  .choice-options,
+  .shortcut-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.brand-mark {
+  border-color: #a7cadb;
+  background: #cde8f7 url("./icon-192.png?v=20260903-v230") center / cover no-repeat;
+}
+
+.brand-mark::before,
+.brand-mark::after,
+.brand-mark i {
+  display: none;
+}

@@ -12,7 +12,13 @@ const SYNC_CONFIG_RAW = window.LIFE_LOG_SYNC_CONFIG || {};
 const SYNC_CONFIG = { workerUrl: String(SYNC_CONFIG_RAW.workerUrl || "").replace(/\/+$/, "") };
 const SYNC_CONFIGURED = /^https:\/\//.test(SYNC_CONFIG.workerUrl);
 const DEFAULT_FOCUS = ["faith", "sleep", "body", "care", "movement", "reading", "people", "completed", "dream"];
-const QUICK_TRACKER_IDS = ["faith", "sleep", "body", "care", "movement", "reading", "people", "completed", "dream"];
+const QUICK_TRACKER_IDS = ["sleep", "movement", "body", "dream", "completed", "care"];
+const MOVEMENT_CHOICES = [
+  "八段锦＋拍八虚", "普拉提", "跑步机上坡走", "拳击",
+  "拉伸", "HIIT", "力量训练", "其他"
+];
+const MOVEMENT_DURATIONS = [10, 16, 20, 30, 45, 60];
+const CARE_CHOICES = ["洗澡", "洗衣", "排便", "按摩"];
 
 const BUILT_IN_TRACKERS = [
   { id: "faith", name: "灵修", short: "灵", group: "人与精神", preset: "faith", mode: "occurrence", tone: "sun", builtIn: true },
@@ -463,10 +469,13 @@ function renderTodayStream() {
 function renderToday() {
   const today = todayKey();
   const isToday = activeDate === today;
-  $("#today-weekday").textContent = `${isToday ? "今天" : "历史"} · ${new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(dateFromKey(activeDate))}`;
+  $("#today-weekday").textContent = (isToday ? "今天" : "历史") + " · "
+    + new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(dateFromKey(activeDate));
   $("#today-title").textContent = formatDay(activeDate);
   $("#return-today").hidden = isToday;
   $("#history-notice").hidden = isToday;
+  $("#next-today-day").disabled = isToday;
+  $("#next-today-day").setAttribute("aria-disabled", String(isToday));
   renderDailyMemo();
   renderPrimings();
   renderTodayStream();
@@ -474,7 +483,6 @@ function renderToday() {
   if (!editingNoteId) $("#note-input").value = state.drafts[activeDate] || "";
   autoResize($("#note-input"));
 }
-
 function renderNote(note) {
   const traces = tracesForNote(note.id);
   const traceHtml = traces.length
@@ -533,6 +541,20 @@ function changeSelectedCalendarDate(amount) {
   animateCalendarElement($("#selected-day-content"), amount);
 }
 
+function changeActiveDate(amount) {
+  const nextDate = addDays(activeDate, amount);
+  const today = todayKey();
+  if (nextDate > today) {
+    showToast("已经是今天。");
+    return;
+  }
+  activeDate = nextDate;
+  resetComposer();
+  resetMemoComposer();
+  renderToday();
+  animateCalendarElement($(".today-shell"), amount);
+  requestAnimationFrame(() => $("#note-form").scrollIntoView({ block: "end", behavior: reducedMotionQuery.matches ? "auto" : "smooth" }));
+}
 function bindHorizontalSwipe(surface, onSwipe, options = {}) {
   if (!surface) return;
   const visual = options.visual || surface;
@@ -722,8 +744,8 @@ function summarizeTracker(tracker, traces) {
     return `${days} 天 · ${count} 次${practices.length ? ` · ${practices.join("、")}` : ""}`;
   }
   if (tracker.preset === "care") {
-    const activities = countValues(traces.map((trace) => trace.fields?.activity));
-    return `${days} 天 · ${count} 次${activities.length ? ` · ${activities.join("、")}` : ""}`;
+    const activities = countValues(traces.flatMap((trace) => splitChoiceValue(trace.fields?.activity)));
+    return days + " 天 · " + count + " 次" + (activities.length ? " · " + activities.join("、") : "");
   }
   if (tracker.preset === "completed") {
     const details = traces.map((trace) => trace.fields?.detail).filter(Boolean);
@@ -732,10 +754,18 @@ function summarizeTracker(tracker, traces) {
   if (tracker.preset === "dream") {
     const clarity = countValues(traces.map((trace) => trace.fields?.clarity));
     return `记得 ${count} 次${clarity.length ? ` · ${clarity.join("、")}` : ""}`;
-  }  if (tracker.preset === "movement") {
+  }
+  if (tracker.preset === "movement") {
     const minutes = traces.reduce((sum, trace) => sum + numeric(trace.fields?.durationMin), 0);
     const distance = traces.reduce((sum, trace) => sum + numeric(trace.fields?.distanceKm), 0);
-    return `${days} 天 · ${count} 次${minutes ? ` · ${formatNumber(minutes, 0)} 分钟` : ""}${distance ? ` · ${formatNumber(distance)} 公里` : ""}`;
+    const activities = countValues(traces.map((trace) => {
+      const fields = trace.fields || {};
+      return fields.activity === "其他" && fields.detail ? fields.detail : fields.activity;
+    }));
+    return days + " 天 · " + count + " 次"
+      + (minutes ? " · " + formatNumber(minutes, 0) + " 分钟" : "")
+      + (distance ? " · " + formatNumber(distance) + " 公里" : "")
+      + (activities.length ? " · " + activities.join("、") : "");
   }
   if (tracker.preset === "reading") {
     const titles = [...new Set(traces.map((trace) => trace.fields?.title).filter(Boolean))];
@@ -784,25 +814,32 @@ function traceSummary(trace) {
   const tracker = trackerById(trace.trackerId);
   const fields = trace.fields || {};
   if (!tracker) return "记录";
-  if (tracker.preset === "faith") return fields.detail ? `${fields.practice || "灵修"} · ${fields.detail}` : (fields.practice || "灵修");
-  if (tracker.preset === "care") return fields.detail ? `${fields.activity || "庶务"} · ${fields.detail}` : (fields.activity || "庶务");
-  if (tracker.preset === "completed") return fields.detail ? `完成 · ${fields.detail}` : "完成一件事";
-  if (tracker.preset === "dream") return fields.detail ? `梦 · ${fields.detail}` : "记得梦";  if (tracker.preset === "movement") {
-    return `${fields.activity || "运动"}${fields.durationMin ? ` ${formatNumber(numeric(fields.durationMin), 0)}m` : ""}${fields.distanceKm ? ` ${formatNumber(numeric(fields.distanceKm))}km` : ""}`;
+  if (tracker.preset === "faith") return fields.detail ? (fields.practice || "灵修") + " · " + fields.detail : (fields.practice || "灵修");
+  if (tracker.preset === "care") return fields.detail ? (fields.activity || "庶务") + " · " + fields.detail : (fields.activity || "庶务");
+  if (tracker.preset === "completed") return fields.detail ? "完成 · " + fields.detail : "完成一件事";
+  if (tracker.preset === "dream") return fields.detail ? "梦 · " + fields.detail : "记得梦";
+  if (tracker.preset === "movement") {
+    const activity = fields.activity === "其他" && fields.detail ? fields.detail : (fields.activity || "运动");
+    return activity
+      + (fields.durationMin ? " " + formatNumber(numeric(fields.durationMin), 0) + "m" : "")
+      + (fields.distanceKm ? " " + formatNumber(numeric(fields.distanceKm)) + "km" : "");
   }
   if (tracker.preset === "reading") {
-    const title = fields.title ? `《${fields.title}》` : "阅读";
-    return `${fields.itemType === "文章" ? "读文" : "读"}${title}${fields.progressValue ? ` ${formatNumber(numeric(fields.progressValue))}${fields.progressUnit || ""}` : ""}`;
+    const title = fields.title ? "《" + fields.title + "》" : "阅读";
+    return (fields.itemType === "文章" ? "读文" : "读") + title
+      + (fields.progressValue ? " " + formatNumber(numeric(fields.progressValue)) + (fields.progressUnit || "") : "");
   }
-  if (tracker.preset === "people") return fields.name ? `和 ${fields.name}` : "社交";
+  if (tracker.preset === "people") return fields.name ? "和 " + fields.name : "社交";
   if (tracker.preset === "body") return fields.signal || "身体";
-  if (tracker.preset === "sleep") return `睡${fields.hours ? ` ${formatNumber(numeric(fields.hours))}h` : ""}${fields.quality ? ` · ${fields.quality}` : ""}`;
+  if (tracker.preset === "sleep") {
+    return "睡" + (fields.hours ? " " + formatNumber(numeric(fields.hours)) + "h" : "")
+      + (fields.quality ? " · " + fields.quality : "");
+  }
   const detail = fields.detail || fields.state || "";
-  if (tracker.mode === "duration" && fields.durationMin) return `${detail || tracker.name} ${formatNumber(numeric(fields.durationMin), 0)}m`;
-  if (tracker.mode === "quantity" && fields.quantity) return `${detail || tracker.name} ${formatNumber(numeric(fields.quantity))}${tracker.unit || ""}`;
-  return detail ? `${tracker.name} · ${detail}` : tracker.name;
+  if (tracker.mode === "duration" && fields.durationMin) return (detail || tracker.name) + " " + formatNumber(numeric(fields.durationMin), 0) + "m";
+  if (tracker.mode === "quantity" && fields.quantity) return (detail || tracker.name) + " " + formatNumber(numeric(fields.quantity)) + (tracker.unit || "");
+  return detail ? tracker.name + " · " + detail : tracker.name;
 }
-
 function traceDetail(trace) {
   const tracker = trackerById(trace.trackerId);
   const fields = trace.fields || {};
@@ -863,23 +900,120 @@ function selectField(label, field, value, choices, full = false) {
   return `<label class="${full ? "full" : ""}">${escapeHtml(label)}<select data-field="${escapeAttr(field)}">${choices.map((choice) => `<option value="${escapeAttr(choice)}" ${choice === value ? "selected" : ""}>${escapeHtml(choice)}</option>`).join("")}</select></label>`;
 }
 
+function splitChoiceValue(value) {
+  return String(value || "")
+    .split(/[、,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => item === "自我按摩" ? "按摩" : item);
+}
+
+function choiceField(label, field, value, choices, options = {}) {
+  const selectedValues = options.multiple ? splitChoiceValue(value) : [String(value || "")];
+  const selected = new Set(selectedValues);
+  const storedValue = options.multiple ? [...selected].join("、") : String(value || "");
+  const buttons = choices.map((choice) => {
+    const pressed = selected.has(choice);
+    return '<button type="button" data-field-choice="' + escapeAttr(choice)
+      + '" data-choice-field="' + escapeAttr(field)
+      + '" data-multiple="' + String(Boolean(options.multiple))
+      + '" aria-pressed="' + String(pressed) + '">' + escapeHtml(choice) + '</button>';
+  }).join("");
+  return '<div class="choice-field ' + (options.full ? "full" : "") + '">'
+    + '<span class="field-label">' + escapeHtml(label) + '</span>'
+    + '<input type="hidden" data-field="' + escapeAttr(field) + '" value="' + escapeAttr(storedValue) + '" />'
+    + '<div class="choice-options" role="group" aria-label="' + escapeAttr(label) + '">' + buttons + '</div>'
+    + '</div>';
+}
+
+function fieldShortcuts(label, field, value, choices) {
+  const buttons = choices.map((choice) => {
+    const pressed = String(value || "") === String(choice);
+    return '<button type="button" data-set-field="' + escapeAttr(field)
+      + '" data-set-value="' + escapeAttr(choice)
+      + '" aria-pressed="' + String(pressed) + '">' + escapeHtml(choice) + '</button>';
+  }).join("");
+  return '<div class="field-shortcuts full"><span class="field-label">' + escapeHtml(label)
+    + '</span><div class="shortcut-options" role="group" aria-label="' + escapeAttr(label) + '">'
+    + buttons + '</div></div>';
+}
+
+function findFieldInput(fieldset, field) {
+  return $$("[data-field]", fieldset).find((input) => input.dataset.field === field) || null;
+}
+
+function syncFieldButtons(fieldset, field, value, multiple = false) {
+  const values = multiple ? new Set(splitChoiceValue(value)) : new Set([String(value || "")]);
+  $$("[data-choice-field]", fieldset)
+    .filter((button) => button.dataset.choiceField === field)
+    .forEach((button) => button.setAttribute("aria-pressed", String(values.has(button.dataset.fieldChoice))));
+  $$("[data-set-field]", fieldset)
+    .filter((button) => button.dataset.setField === field)
+    .forEach((button) => button.setAttribute("aria-pressed", String(String(value || "") === button.dataset.setValue)));
+}
+
+function handleFieldControl(event, root) {
+  const fieldset = event.target.closest("[data-tracker-fields]");
+  if (!fieldset || !root.contains(fieldset)) return;
+
+  const choice = event.target.closest("[data-field-choice]");
+  if (choice) {
+    const field = choice.dataset.choiceField;
+    const input = findFieldInput(fieldset, field);
+    if (!input) return;
+    const multiple = choice.dataset.multiple === "true";
+    if (multiple) {
+      const values = new Set(splitChoiceValue(input.value));
+      if (values.has(choice.dataset.fieldChoice)) values.delete(choice.dataset.fieldChoice);
+      else values.add(choice.dataset.fieldChoice);
+      input.value = [...values].join("、");
+    } else {
+      input.value = choice.dataset.fieldChoice;
+    }
+    syncFieldButtons(fieldset, field, input.value, multiple);
+    if (field === "activity" && choice.dataset.fieldChoice === "八段锦＋拍八虚") {
+      const duration = findFieldInput(fieldset, "durationMin");
+      if (duration && !String(duration.value || "").trim()) {
+        duration.value = "16";
+        syncFieldButtons(fieldset, "durationMin", duration.value);
+      }
+    }
+    return;
+  }
+
+  const shortcut = event.target.closest("[data-set-field]");
+  if (!shortcut) return;
+  const input = findFieldInput(fieldset, shortcut.dataset.setField);
+  if (!input) return;
+  input.value = shortcut.dataset.setValue;
+  syncFieldButtons(fieldset, shortcut.dataset.setField, input.value);
+}
 function traceFieldset(tracker, fields) {
   let content = "";
   if (tracker.preset === "faith") {
     content = selectField("实践", "practice", fields.practice || "", ["", "祷告", "读经", "默想", "敬拜", "阅读属灵读物", "其他"])
       + inputField("触动或一句记录", "detail", fields.detail, { placeholder: "可以留空", full: true });
   } else if (tracker.preset === "care") {
-    content = selectField("项目", "activity", fields.activity || "", ["", "洗澡", "洗衣", "排便", "自我按摩", "其他"])
-      + inputField("补充", "detail", fields.detail, { placeholder: "需要时再写", full: true });
+    const careValue = splitChoiceValue(fields.activity).join("、");
+    const open = fields.detail ? " open" : "";
+    content = choiceField("今天记下", "activity", careValue, CARE_CHOICES, { multiple: true, full: true })
+      + '<details class="optional-fields full"' + open + '><summary>补充一句</summary><div class="optional-fields-grid">'
+      + inputField("补充", "detail", fields.detail, { placeholder: "需要时再写", full: true })
+      + '</div></details>';
   } else if (tracker.preset === "movement") {
-    content = inputField("做了什么", "activity", fields.activity, { placeholder: "跑步机上坡走、八段锦、拉伸……", full: true })
+    const open = fields.detail ? " open" : "";
+    content = choiceField("常用运动", "activity", fields.activity, MOVEMENT_CHOICES, { full: true })
       + inputField("分钟", "durationMin", fields.durationMin, { type: "number", inputmode: "decimal", min: 0, step: 1 })
-      + inputField("公里数", "distanceKm", fields.distanceKm, { type: "number", inputmode: "decimal", min: 0, step: 0.1 });
+      + inputField("公里数", "distanceKm", fields.distanceKm, { type: "number", inputmode: "decimal", min: 0, step: 0.1 })
+      + fieldShortcuts("常用时长（分钟）", "durationMin", fields.durationMin, MOVEMENT_DURATIONS)
+      + '<details class="optional-fields full"' + open + '><summary>其他运动或补充</summary><div class="optional-fields-grid">'
+      + inputField("运动名称或感受", "detail", fields.detail, { placeholder: "需要时再写", full: true })
+      + '</div></details>';
   } else if (tracker.preset === "completed") {
     content = inputField("完成了什么", "detail", fields.detail, { placeholder: "例如：完成文件打包", full: true });
   } else if (tracker.preset === "dream") {
-    content = inputField("留下一句话", "detail", fields.detail, { placeholder: "只写还记得的部分", full: true })
-      + selectField("清晰度", "clarity", fields.clarity || "", ["", "清晰", "模糊"]);
+    content = inputField("还记得什么", "detail", fields.detail, { placeholder: "只写还记得的部分", full: true })
+      + '<input type="hidden" data-field="clarity" value="' + escapeAttr(fields.clarity || "") + '" />';
   } else if (tracker.preset === "reading") {
     content = selectField("类型", "itemType", fields.itemType || "书", ["书", "文章"])
       + inputField("名称", "title", fields.title, { placeholder: "书名或文章名", full: true })
@@ -891,26 +1025,30 @@ function traceFieldset(tracker, fields) {
   } else if (tracker.preset === "body") {
     content = inputField("身体信号", "signal", fields.signal, { placeholder: "例如：头痛、浮肿、肩背紧", full: true });
   } else if (tracker.preset === "sleep") {
+    const open = fields.napMinutes || fields.bedtimeActivity || fields.factors ? " open" : "";
     content = inputField("睡眠时长（小时）", "hours", fields.hours, { type: "number", inputmode: "decimal", min: 0, max: 24, step: 0.1 })
       + selectField("睡得如何", "quality", fields.quality || "", ["", "好", "一般", "差"])
       + selectField("恢复感", "recovery", fields.recovery || "", ["", "好", "一般", "差"])
-      + inputField("补觉（分钟）", "napMinutes", fields.napMinutes, { type: "number", inputmode: "decimal", min: 0, step: 1 })
+      + '<details class="optional-fields full"' + open + '><summary>午睡与影响因素</summary><div class="optional-fields-grid">'
+      + inputField("午睡 / 补觉（分钟）", "napMinutes", fields.napMinutes, { type: "number", inputmode: "decimal", min: 0, step: 1 })
       + inputField("睡前活动", "bedtimeActivity", fields.bedtimeActivity, { placeholder: "例如：刷手机、阅读、深聊", full: true })
-      + inputField("影响因素", "factors", fields.factors, { placeholder: "鸟叫、早醒、入睡困难、环境噪音……", full: true });
+      + inputField("影响因素", "factors", fields.factors, { placeholder: "鸟叫、早醒、入睡困难、环境噪音……", full: true })
+      + '</div></details>';
   } else if (tracker.mode === "duration") {
     content = inputField("简短痕迹", "detail", fields.detail, { placeholder: "发生了什么", full: true })
       + inputField("分钟", "durationMin", fields.durationMin, { type: "number", inputmode: "decimal", min: 0, step: 1 });
   } else if (tracker.mode === "quantity") {
+    const quantityLabel = "数量" + (tracker.unit ? "（" + tracker.unit + "）" : "");
     content = inputField("简短痕迹", "detail", fields.detail, { placeholder: "发生了什么", full: true })
-      + inputField(`数量${tracker.unit ? `（${tracker.unit}）` : ""}`, "quantity", fields.quantity, { type: "number", inputmode: "decimal", min: 0, step: 0.1 });
+      + inputField(quantityLabel, "quantity", fields.quantity, { type: "number", inputmode: "decimal", min: 0, step: 0.1 });
   } else if (tracker.mode === "state") {
     content = inputField("状态", "state", fields.state, { placeholder: "用几个字留下状态", full: true });
   } else {
     content = inputField("简短痕迹", "detail", fields.detail, { placeholder: "可以留空", full: true });
   }
-  return `<fieldset class="trace-fieldset" data-tracker-fields="${escapeAttr(tracker.id)}"><legend>${escapeHtml(tracker.name)}</legend><div class="field-grid">${content}</div></fieldset>`;
+  return '<fieldset class="trace-fieldset" data-tracker-fields="' + escapeAttr(tracker.id) + '"><legend>'
+    + escapeHtml(tracker.name) + '</legend><div class="field-grid">' + content + '</div></fieldset>';
 }
-
 function openTraceDialog(noteId) {
   const note = noteById(noteId);
   if (!note) return;
@@ -988,20 +1126,25 @@ function renderQuickChoices() {
   renderQuickFields();
 }
 
-function openQuickDialog(traceId = null) {
+function openQuickDialog(traceId = null, initialTrackerId = null) {
   const existing = traceId ? quickTraceById(traceId) : null;
+  const initialTracker = existing?.trackerId || (trackerById(initialTrackerId) ? initialTrackerId : null);
+  const directEntry = Boolean(existing || initialTracker);
   activeQuickTraceId = existing?.id || null;
-  selectedQuickTrackerId = existing?.trackerId || null;
+  selectedQuickTrackerId = initialTracker;
   quickDraft = { ...(existing?.fields || {}) };
-  $("#quick-dialog-title").textContent = existing ? "调整这笔数据" : "记一笔数据";
+  const tracker = trackerById(selectedQuickTrackerId);
+  $("#quick-dialog-title").textContent = existing
+    ? "调整" + (tracker?.name || "这笔数据")
+    : (tracker ? "记录" + tracker.name : "记一笔数据");
   $("#delete-quick-trace").hidden = !existing;
-  const needsMore = Boolean(existing && !QUICK_TRACKER_IDS.includes(existing.trackerId));
-  $("#toggle-quick-more").setAttribute("aria-expanded", String(needsMore));
-  $("#quick-more-choices").hidden = !needsMore;
+  $("#quick-entry-picker").hidden = directEntry;
+  $("#quick-dialog").classList.toggle("direct-entry", directEntry);
+  $("#toggle-quick-more").setAttribute("aria-expanded", "false");
+  $("#quick-more-choices").hidden = true;
   renderQuickChoices();
   $("#quick-dialog").showModal();
 }
-
 function quickFieldsValid(tracker, fields) {
   const hasAny = Object.values(fields).some((value) => String(value || "").trim());
   if (!tracker) return false;
@@ -1932,7 +2075,7 @@ async function importBackupFile(file) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const register = () => navigator.serviceWorker.register("./sw.js?v=20260813-v221-recovery").catch(() => {});
+  const register = () => navigator.serviceWorker.register("./sw.js?v=20260903-v230").catch(() => {});
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }
@@ -1965,6 +2108,8 @@ function bindEvents() {
   });
   $("#return-today").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); resetMemoComposer(); switchView("today", { scrollToEnd: true }); });
   $("#history-return").addEventListener("click", () => { activeDate = todayKey(); resetComposer(); resetMemoComposer(); switchView("today", { scrollToEnd: true }); });
+  $("#previous-today-day").addEventListener("click", () => changeActiveDate(-1));
+  $("#next-today-day").addEventListener("click", () => changeActiveDate(1));
   $("#note-form").addEventListener("submit", saveNote);
   $("#note-input").addEventListener("input", (event) => {
     autoResize(event.target);
@@ -2006,14 +2151,19 @@ function bindEvents() {
     if (memo) $("#priming-target").value = memo.text;
   });
   $("#open-quick-log").addEventListener("click", () => openQuickDialog());
+  $$("[data-core-tracker]").forEach((button) => {
+    button.addEventListener("click", () => openQuickDialog(null, button.dataset.coreTracker));
+  });
   $("#quick-dialog").addEventListener("click", (event) => {
     const choice = event.target.closest("[data-quick-tracker]");
     if (!choice) return;
     if (selectedQuickTrackerId === choice.dataset.quickTracker) return;
     selectedQuickTrackerId = choice.dataset.quickTracker;
     quickDraft = {};
+    $("#quick-dialog-title").textContent = "记录" + (trackerById(selectedQuickTrackerId)?.name || "数据");
     renderQuickChoices();
   });
+  $("#quick-fields").addEventListener("click", (event) => handleFieldControl(event, $("#quick-fields")));
   $("#quick-form").addEventListener("submit", saveQuickTrace);
   $("#close-quick-dialog").addEventListener("click", () => closeDialog($("#quick-dialog")));
   $("#delete-quick-trace").addEventListener("click", deleteQuickTrace);
@@ -2039,6 +2189,7 @@ function bindEvents() {
     if (action === "delete") deleteNote(noteId);
   });
 
+  $("#trace-fields").addEventListener("click", (event) => handleFieldControl(event, $("#trace-fields")));
   $("#trace-dialog").addEventListener("click", (event) => {
     const choice = event.target.closest("[data-tracker-choice]");
     if (!choice) return;
@@ -2064,6 +2215,11 @@ function bindEvents() {
     selectedCalendarDate = todayKey();
     renderMonth();
   });
+  bindHorizontalSwipe($("#today-view"), (direction) => changeActiveDate(direction > 0 ? -1 : 1), {
+    visual: $(".today-shell"),
+    ignoreInteractive: true
+  });
+
   const calendarSection = $(".calendar-section");
   calendarSection.addEventListener("click", (event) => {
     if (!suppressCalendarClick) return;

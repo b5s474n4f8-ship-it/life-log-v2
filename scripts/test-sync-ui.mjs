@@ -108,6 +108,58 @@ try {
   await page.waitForFunction(() => document.querySelector("#header-sync-mark")?.classList.contains("is-synced"));
   assert.equal(cloudState, null);
 
+  assert.equal(await page.locator(".daily-memo").isVisible(), false);
+  assert.deepEqual(
+    await page.locator("[data-core-tracker]").allTextContents(),
+    ["睡眠", "运动", "身体", "梦境", "完成", "庶务"]
+  );
+
+  await page.click('[data-core-tracker="movement"]');
+  assert.equal(await page.locator("#quick-entry-picker").isVisible(), false);
+  await page.click('[data-field-choice="八段锦＋拍八虚"]');
+  assert.equal(await page.locator('[data-field="durationMin"]').inputValue(), "16");
+  await page.screenshot({ path: path.join(artifactDir, "iphone-movement.png"), fullPage: true });
+  await page.click('#quick-form button[type="submit"]');
+  await page.waitForFunction(() => document.querySelector("#note-list")?.textContent.includes("八段锦＋拍八虚 16m"));
+
+  await page.click('[data-core-tracker="care"]');
+  await page.click('[data-field-choice="洗澡"]');
+  await page.click('[data-field-choice="排便"]');
+  await page.click('[data-field-choice="按摩"]');
+  await page.screenshot({ path: path.join(artifactDir, "iphone-care.png"), fullPage: true });
+  await page.click('#quick-form button[type="submit"]');
+  await page.waitForFunction(() => document.querySelector("#note-list")?.textContent.includes("洗澡、排便、按摩"));
+
+  const todayTitle = await page.locator("#today-title").textContent();
+  await page.click("#previous-today-day");
+  assert.equal(await page.locator("#history-notice").isVisible(), true);
+  assert.equal(await page.locator("#next-today-day").isEnabled(), true);
+  await page.fill("#note-input", "补记到昨天，而不是今天");
+  await page.click("#save-note");
+  await page.click("#next-today-day");
+  assert.equal(await page.locator("#today-title").textContent(), todayTitle);
+  assert.equal(await page.locator("#next-today-day").isDisabled(), true);
+  assert.equal((await page.locator("#note-list").textContent()).includes("补记到昨天，而不是今天"), false);
+
+  const swipeDay = async (startX, endX) => page.evaluate(({ startX, endX }) => {
+    const target = document.querySelector(".day-line");
+    const dispatch = (type, x) => target.dispatchEvent(new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 7,
+      pointerType: "touch",
+      isPrimary: true,
+      clientX: x,
+      clientY: 180
+    }));
+    dispatch("pointerdown", startX);
+    dispatch("pointermove", endX);
+    dispatch("pointerup", endX);
+  }, { startX, endX });
+  await swipeDay(330, 40);
+  assert.equal(await page.locator("#history-notice").isVisible(), true);
+  await swipeDay(40, 330);
+  assert.equal(await page.locator("#today-title").textContent(), todayTitle);
   await page.fill("#note-input", "第一条自动同步记录");
   await page.click("#save-note");
   await page.waitForFunction(() => document.querySelector("#note-list")?.textContent.includes("第一条自动同步记录"));
@@ -150,6 +202,29 @@ try {
   await restoredPage.waitForFunction(() => document.querySelector("#note-list")?.textContent.includes("离线后继续记录"));
   assert.equal(await restoredPage.evaluate(() => location.hash), "");
   await restoredContext.close();
+
+  const compactContext = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+  const compactPage = await compactContext.newPage();
+  await compactPage.goto(appUrl);
+  const compactLayout = await compactPage.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    coreButtons: document.querySelectorAll("[data-core-tracker]").length,
+    inputFont: parseFloat(getComputedStyle(document.querySelector("#note-input")).fontSize)
+  }));
+  assert.equal(compactLayout.scrollWidth, compactLayout.width);
+  assert.equal(compactLayout.coreButtons, 6);
+  assert.ok(compactLayout.inputFont >= 16);
+  await compactPage.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+  await compactPage.reload();
+  await compactContext.setOffline(true);
+  await compactPage.reload({ waitUntil: "domcontentloaded" });
+  assert.equal(await compactPage.locator("[data-core-tracker]").count(), 6);
+  await compactContext.setOffline(false);
+  await compactPage.screenshot({ path: path.join(artifactDir, "iphone-375-today.png"), fullPage: true });
+  await compactPage.setViewportSize({ width: 1280, height: 900 });
+  await compactPage.screenshot({ path: path.join(artifactDir, "desktop-today.png"), fullPage: true });
+  await compactContext.close();
 
   console.log("iPhone sync UI tests passed.");
 } finally {
