@@ -1,12 +1,13 @@
-const CACHE_NAME = "life-log-calendar-20260903-v230";
+const CACHE_NAME = "life-log-calendar-20260903-v240";
 const PRECACHE = [
   "./",
   "./index.html",
-  "./styles.css?v=20260903-v230",
-  "./sync-config.js?v=20260903-v230",
-  "./app.js?v=20260903-v230",
-  "./manifest.webmanifest?v=20260903-v230",
-  "./mark.svg?v=20260903-v230",
+  "./styles.css?v=20260903-v240",
+  "./sync-config.js?v=20260903-v240",
+  "./app.js?v=20260903-v240",
+  "./manifest.webmanifest?v=20260903-v240",
+  "./mark.svg?v=20260903-v240",
+  "./brand-art-v240.png?v=20260903-v240",
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png"

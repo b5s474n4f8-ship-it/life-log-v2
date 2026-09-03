@@ -12,6 +12,8 @@
   --blue-soft: #e8f3f8;
   --green-soft: #edf5ef;
   --warm-soft: #fff8df;
+  --month-glow: #e6f3e9;
+  --focus-ring: #3f7b594d;
   --danger: #8b3c36;
   --radius: 6px;
   --shadow: 0 12px 36px rgb(38 64 57 / 0.1);
@@ -40,7 +42,9 @@ body {
   margin: 0;
   overflow-x: hidden;
   color: var(--ink);
-  background: var(--canvas);
+  background-color: var(--canvas);
+  background-image: linear-gradient(180deg, var(--month-glow) 0, var(--canvas) 240px);
+  background-repeat: no-repeat;
   letter-spacing: 0;
 }
 
@@ -63,7 +67,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 3px solid rgb(38 119 168 / 0.3);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -92,7 +96,7 @@ summary:focus-visible {
   z-index: 20;
   padding-top: env(safe-area-inset-top);
   border-bottom: 1px solid var(--line);
-  background: rgb(251 252 250 / 0.98);
+  background: var(--paper);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -125,9 +129,9 @@ summary:focus-visible {
   width: 38px;
   height: 38px;
   margin-right: 11px;
-  border: 1px solid #8db9d0;
-  border-radius: var(--radius);
-  background: var(--blue-soft);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .brand-mark::before,
@@ -460,6 +464,51 @@ h3 {
   text-align: center;
 }
 
+.cloud-history-empty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  margin: 24px 0 8px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.cloud-history-empty strong {
+  display: block;
+  font-size: 15px;
+}
+
+.cloud-history-empty p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.cloud-history-empty .secondary-button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.cloud-history-empty.is-loading {
+  border-left-color: var(--line-strong);
+}
+
+@media (max-width: 520px) {
+  .cloud-history-empty {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .cloud-history-empty .secondary-button {
+    width: 100%;
+  }
+}
+
 .daily-facts {
   margin-top: 34px;
   padding: 18px 0;
@@ -620,7 +669,7 @@ input::placeholder {
 }
 
 .primary-button:hover {
-  background: #104e71;
+  background: var(--blue-deep);
 }
 
 .secondary-button {
@@ -721,7 +770,7 @@ input::placeholder {
 }
 
 .calendar-day:hover {
-  background: #f5fafc;
+  background: var(--blue-soft);
 }
 
 .calendar-day.outside {
@@ -1045,7 +1094,7 @@ input::placeholder {
   margin: 16px -24px -24px;
   padding: 14px 24px max(14px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
-  background: rgb(251 252 250 / 0.98);
+  background: var(--paper);
 }
 
 .single-action {
@@ -1225,7 +1274,7 @@ input::placeholder {
     overflow: hidden;
     border: 1px solid var(--line-strong);
     border-radius: var(--radius);
-    background: rgb(251 252 250 / 0.98);
+    background: var(--paper);
     box-shadow: 0 8px 24px rgb(38 64 57 / 0.14);
   }
 
@@ -1591,7 +1640,7 @@ input::placeholder {
 }
 
 .backup-action:active {
-  background: #dcecf3;
+  background: var(--blue-soft);
 }
 
 .backup-action > span:first-child {
@@ -2132,14 +2181,14 @@ input::placeholder {
 
 /* V2.2 private cloud sync */
 .header-sync-mark { display:inline-block; flex:0 0 9px; width:9px; height:9px; border:1.5px solid var(--line-strong); border-radius:50%; background:transparent; font-size:0 !important; }
-.header-sync-mark.is-synced { border-color:#4f9278; background:#4f9278; box-shadow:0 0 0 3px rgb(79 146 120 / .12); }
+.header-sync-mark.is-synced { border-color:var(--blue); background:var(--blue); box-shadow:0 0 0 3px var(--focus-ring); }
 .header-sync-mark.is-syncing { border-color:var(--blue); border-top-color:transparent; animation:sync-spin .8s linear infinite; }
 .header-sync-mark.is-error, .header-sync-mark.is-offline { border-color:#b98942; background:var(--warm-soft); }
 .header-sync-mark.is-disconnected, .header-sync-mark.is-unconfigured { background:var(--paper); }
 @keyframes sync-spin { to { transform:rotate(360deg); } }
 .cloud-status { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:12px; align-items:start; padding:16px; border:1px solid var(--line); border-radius:var(--radius); background:var(--blue-soft); }
 .cloud-status-mark { width:9px; height:9px; margin-top:6px; border:1.5px solid var(--line-strong); border-radius:50%; background:var(--paper); }
-.cloud-status.is-synced .cloud-status-mark { border-color:#4f9278; background:#4f9278; }
+.cloud-status.is-synced .cloud-status-mark { border-color:var(--blue); background:var(--blue); }
 .cloud-status.is-syncing .cloud-status-mark { border-color:var(--blue); border-top-color:transparent; animation:sync-spin .8s linear infinite; }
 .cloud-status.is-error .cloud-status-mark, .cloud-status.is-offline .cloud-status-mark { border-color:#b98942; background:var(--warm-soft); }
 .cloud-status strong, .context-handoff strong { display:block; font-size:14px; }
@@ -2151,7 +2200,7 @@ input::placeholder {
 .sync-connect-actions { margin-top:12px; }
 .sync-connect-actions .primary-button { width:100%; min-height:48px; }
 .sync-form-note { min-height:21px; }
-.sync-account { display:flex; gap:12px; align-items:center; justify-content:space-between; min-height:48px; margin-top:12px; padding:4px 4px 4px 14px; border-left:2px solid #4f9278; color:var(--muted); font-size:13px; }
+.sync-account { display:flex; gap:12px; align-items:center; justify-content:space-between; min-height:48px; margin-top:12px; padding:4px 4px 4px 14px; border-left:2px solid var(--blue); color:var(--muted); font-size:13px; }
 .context-handoff { margin-top:18px; padding:16px; border:1px solid var(--line); border-radius:var(--radius); background:var(--green-soft); }
 @media (max-width:720px) {
   .cloud-status { grid-template-columns:12px minmax(0,1fr); }
@@ -2249,7 +2298,7 @@ input::placeholder {
 
 .core-quick-grid button:hover,
 .core-quick-grid button:active {
-  border-color: #8eb6ca;
+  border-color: var(--line-strong);
   color: var(--blue-deep);
   background: var(--blue-soft);
 }
@@ -2399,8 +2448,10 @@ input::placeholder {
   }
 }
 .brand-mark {
-  border-color: #a7cadb;
-  background: #cde8f7 url("./icon-192.png?v=20260903-v230") center / cover no-repeat;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent url("./brand-art-v240.png?v=20260903-v240") center / 100% 100% no-repeat;
 }
 
 .brand-mark::before,

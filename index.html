@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f2f6f4" />
+  <meta name="theme-color" content="#eef6f1" />
   <meta name="application-name" content="生命力日志" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="生命力日志" />
   <meta name="format-detection" content="telephone=no" />
   <title>生命力日志</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260903-v230" />
-  <link rel="icon" href="./icon-192.png?v=20260903-v230" type="image/png" />
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260903-v230" />
-  <link rel="stylesheet" href="./styles.css?v=20260903-v230" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260903-v240" />
+  <link rel="icon" href="./icon-192.png?v=20260903-v240" type="image/png" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260903-v240" />
+  <link rel="stylesheet" href="./styles.css?v=20260903-v240" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到正文</a>
@@ -306,14 +306,14 @@
       </section>
 
       <form class="sync-connect" id="sync-connect-form" hidden>
-        <p>只需连接一次。可直接粘贴私密激活链接；以后每次保存都会在后台同步，Codex 也会从同一份记录开始工作。</p>
-        <label class="sync-token-field">激活链接或私人同步口令
+        <p>如果这是新的浏览器入口，只需连接一次。粘贴完整的私密激活链接后，云端历史会自动载入，以后每次保存都会在后台同步。</p>
+        <label class="sync-token-field">私密激活链接
           <input id="sync-token" name="sync-token" type="password" autocomplete="off" minlength="32" placeholder="粘贴激活链接即可" required />
         </label>
         <div class="sync-connect-actions">
           <button class="primary-button" type="submit">连接同步</button>
         </div>
-        <p class="sync-form-note" id="sync-form-note">口令只保存在这台手机，不会写入公开网页。</p>
+        <p class="sync-form-note" id="sync-form-note">链接只在这台设备上使用，不会写入公开网页。</p>
       </form>
 
       <div class="sync-account" id="sync-account" hidden>
@@ -359,8 +359,8 @@
     </div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./sync-config.js?v=20260903-v230"></script>
-  <script src="./app.js?v=20260903-v230" defer></script>
+  <script src="./sync-config.js?v=20260903-v240"></script>
+  <script src="./app.js?v=20260903-v240" defer></script>
 </body>
 </html>
 

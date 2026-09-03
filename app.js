@@ -20,6 +20,21 @@ const MOVEMENT_CHOICES = [
 const MOVEMENT_DURATIONS = [10, 16, 20, 30, 45, 60];
 const CARE_CHOICES = ["洗澡", "洗衣", "排便", "按摩"];
 
+const MONTH_THEMES = [
+  { id: "january", canvas: "#f1f6f9", paper: "#fbfdfd", ink: "#1d2a30", muted: "#62737b", faint: "#87969c", line: "#cad8df", strong: "#95afbb", accent: "#477f9c", deep: "#2e627c", soft: "#e2eef4", glow: "#e7f2f7", shadow: "rgb(47 91 112 / 0.10)" },
+  { id: "february", canvas: "#faf2f5", paper: "#fffdfd", ink: "#302328", muted: "#79666d", faint: "#9a878d", line: "#e2cfd6", strong: "#c5a2af", accent: "#a5556f", deep: "#7c3d53", soft: "#f5e3e9", glow: "#f9e9ef", shadow: "rgb(115 59 78 / 0.10)" },
+  { id: "march", canvas: "#f1f7f1", paper: "#fcfefc", ink: "#203027", muted: "#65756b", faint: "#8b988f", line: "#ccdbd0", strong: "#9bb7a3", accent: "#568366", deep: "#3b674a", soft: "#e3f0e6", glow: "#eaf5eb", shadow: "rgb(55 100 70 / 0.10)" },
+  { id: "april", canvas: "#eef7f7", paper: "#fbfefe", ink: "#1d3031", muted: "#607476", faint: "#87999a", line: "#c8dcdd", strong: "#91b8ba", accent: "#3f8085", deep: "#2a6368", soft: "#def0f1", glow: "#e5f5f5", shadow: "rgb(43 99 104 / 0.10)" },
+  { id: "may", canvas: "#f5f3fa", paper: "#fefeff", ink: "#29263a", muted: "#6e6a7e", faint: "#918da0", line: "#d8d2e5", strong: "#aaa1c3", accent: "#6f68a2", deep: "#514b82", soft: "#ebe7f5", glow: "#f0ecf9", shadow: "rgb(79 72 125 / 0.10)" },
+  { id: "june", canvas: "#faf8ed", paper: "#fffefa", ink: "#302d20", muted: "#77715e", faint: "#98917d", line: "#e2dcc6", strong: "#c2b688", accent: "#978039", deep: "#705e22", soft: "#f3edd2", glow: "#faf3d8", shadow: "rgb(111 91 31 / 0.10)" },
+  { id: "july", canvas: "#eff6fb", paper: "#fcfeff", ink: "#1d2933", muted: "#61717d", faint: "#8796a0", line: "#cad9e4", strong: "#96b3c8", accent: "#437ca9", deep: "#2c6087", soft: "#e2eff8", glow: "#e7f3fb", shadow: "rgb(43 94 132 / 0.10)" },
+  { id: "august", canvas: "#faf2f6", paper: "#fffdfd", ink: "#30242a", muted: "#796970", faint: "#99878f", line: "#e1cfd7", strong: "#c3a1b0", accent: "#a45f7a", deep: "#7d455b", soft: "#f5e3ea", glow: "#f9e9ef", shadow: "rgb(116 66 86 / 0.10)" },
+  { id: "september", canvas: "#eef6f1", paper: "#fbfdfb", ink: "#1d2d24", muted: "#617369", faint: "#87968d", line: "#c9dbcf", strong: "#94b6a0", accent: "#3f7b59", deep: "#285f42", soft: "#deeee4", glow: "#e6f3e9", shadow: "rgb(38 91 61 / 0.10)" },
+  { id: "october", canvas: "#fbf3eb", paper: "#fffdfb", ink: "#32271f", muted: "#78695d", faint: "#9a897b", line: "#e5d1bf", strong: "#c7a384", accent: "#b66731", deep: "#8a481f", soft: "#f6e5d4", glow: "#faead9", shadow: "rgb(137 72 31 / 0.10)" },
+  { id: "november", canvas: "#f4f3f8", paper: "#fefeff", ink: "#292735", muted: "#6f6b79", faint: "#918d9b", line: "#d8d3e0", strong: "#aaa3b9", accent: "#726b8f", deep: "#554f70", soft: "#eae7f1", glow: "#efedf5", shadow: "rgb(82 76 108 / 0.10)" },
+  { id: "december", canvas: "#eef5f5", paper: "#fbfdfd", ink: "#1d2d2e", muted: "#617273", faint: "#879697", line: "#c9dada", strong: "#94b4b5", accent: "#3b7476", deep: "#28595b", soft: "#deeeee", glow: "#e5f2f2", shadow: "rgb(39 87 89 / 0.10)" }
+];
+
 const BUILT_IN_TRACKERS = [
   { id: "faith", name: "灵修", short: "灵", group: "人与精神", preset: "faith", mode: "occurrence", tone: "sun", builtIn: true },
   { id: "dream", name: "梦境", short: "梦", group: "人与精神", preset: "dream", mode: "occurrence", tone: "blue", builtIn: true },
@@ -76,7 +91,8 @@ const cloudSync = {
   error: "",
   timer: null,
   inFlight: null,
-  pending: false
+  pending: false,
+  justActivated: false
 };
 const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -109,6 +125,31 @@ function addDays(key, amount) {
 
 function monthKey(dateKey) {
   return dateKey.slice(0, 7);
+}
+
+function applyMonthTheme(key) {
+  const month = Number(String(key || "").slice(5, 7));
+  const theme = MONTH_THEMES[Math.min(12, Math.max(1, month || 1)) - 1];
+  const root = document.documentElement;
+  const values = {
+    "--paper": theme.paper,
+    "--canvas": theme.canvas,
+    "--ink": theme.ink,
+    "--muted": theme.muted,
+    "--faint": theme.faint,
+    "--line": theme.line,
+    "--line-strong": theme.strong,
+    "--blue": theme.accent,
+    "--blue-deep": theme.deep,
+    "--blue-soft": theme.soft,
+    "--green-soft": theme.soft,
+    "--month-glow": theme.glow,
+    "--focus-ring": theme.accent + "4d",
+    "--shadow": theme.shadow
+  };
+  Object.entries(values).forEach(([name, value]) => root.style.setProperty(name, value));
+  root.dataset.monthTheme = theme.id;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.canvas);
 }
 
 function shiftMonth(key, amount) {
@@ -455,18 +496,43 @@ function renderStandaloneTrace(trace) {
     </article>`;
 }
 
+function cloudHistoryEmptyMarkup() {
+  if (!cloudSync.configured || hasMeaningfulState(state)) return "";
+  if (!cloudSync.session) return `
+    <div class="cloud-history-empty" data-cloud-empty-state>
+      <div><strong>云端历史尚未载入</strong><p>这是一个新的浏览器入口。历史仍保存在私人云端，连接一次后会自动出现。</p></div>
+      <button class="secondary-button" type="button" data-cloud-empty-action="connect">连接并载入</button>
+    </div>`;
+  if (["connecting", "connected", "syncing"].includes(cloudSync.status)) return `
+    <div class="cloud-history-empty is-loading" data-cloud-empty-state role="status">
+      <div><strong>正在载入云端历史</strong><p>请稍候，不需要重复操作。</p></div>
+    </div>`;
+  if (cloudSync.status === "offline") return `
+    <div class="cloud-history-empty" data-cloud-empty-state role="status">
+      <div><strong>联网后会载入历史</strong><p>当前入口尚未取得云端记录，本机内容不会丢失。</p></div>
+    </div>`;
+  if (cloudSync.status === "error") return `
+    <div class="cloud-history-empty" data-cloud-empty-state>
+      <div><strong>云端历史暂时没有载入</strong><p>记录仍在云端，可以安全重试。</p></div>
+      <button class="secondary-button" type="button" data-cloud-empty-action="retry">重新载入</button>
+    </div>`;
+  return "";
+}
+
 function renderTodayStream() {
   const items = [
     ...notesForDate(activeDate).map((note) => ({ kind: "note", value: note, moment: note.createdAt })),
     ...standaloneTracesForDate(activeDate).map((trace) => ({ kind: "trace", value: trace, moment: trace.createdAt }))
   ].sort((a, b) => new Date(a.moment) - new Date(b.moment));
+  const cloudEmpty = items.length ? "" : cloudHistoryEmptyMarkup();
   $("#note-count").textContent = `${items.length} 条痕迹`;
   $("#note-list").innerHTML = items.length
     ? items.map((item) => item.kind === "note" ? renderNote(item.value) : renderStandaloneTrace(item.value)).join("")
-    : `<p class="empty-copy">这一天还是空白。<br />可以只留下一句话。</p>`;
+    : cloudEmpty || `<p class="empty-copy">这一天还是空白。<br />可以只留下一句话。</p>`;
 }
 
 function renderToday() {
+  if (currentView === "today") applyMonthTheme(monthKey(activeDate));
   const today = todayKey();
   const isToday = activeDate === today;
   $("#today-weekday").textContent = (isToday ? "今天" : "历史") + " · "
@@ -504,6 +570,7 @@ function renderNote(note) {
 }
 
 function renderMonth() {
+  if (currentView === "month") applyMonthTheme(calendarMonth);
   $("#month-title").textContent = formatMonth(calendarMonth);
   renderFocusItems($("#month-focus-items"), calendarMonth);
   renderCalendar();
@@ -1706,6 +1773,7 @@ function loadCloudSession() {
     const token = tokenFromActivationLink();
     const saved = token ? { token, lastSyncedAt: null } : JSON.parse(localStorage.getItem(SYNC_SESSION_KEY) || "null");
     if (!saved?.token) return null;
+    cloudSync.justActivated = Boolean(token);
     cloudSync.session = saved;
     localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(saved));
     cloudSync.status = navigator.onLine ? "connected" : "offline";
@@ -1780,7 +1848,7 @@ function renderCloudStatus() {
 
   const states = {
     unconfigured: ["自动同步尚未启用", "当前仍会可靠地保存在这台手机上。"],
-    disconnected: ["连接一次，之后自动同步", "输入私人同步口令，或打开一次激活链接。"],
+    disconnected: ["云端历史尚未载入", "这是新的浏览器入口，连接一次后会自动恢复并继续同步。"],
     connecting: ["正在连接", "请稍候，本机记录不会受到影响。"],
     connected: ["云端已连接", lastSynced ? "上次同步：" + lastSynced : "准备同步现有记录。"],
     syncing: ["正在同步", "你可以继续记录，不需要停在这里。"],
@@ -1799,6 +1867,7 @@ function renderCloudStatus() {
     if (["waiting", "offline", "error"].includes(cloudSync.status)) saveState.textContent = "已保存本机 · 等待同步";
     if (cloudSync.status === "syncing") saveState.textContent = "已保存本机 · 正在同步";
   }
+  if (!hasMeaningfulState(state) && $("#note-list")) renderTodayStream();
 }
 
 async function fetchCloudStateRow() {
@@ -1833,7 +1902,7 @@ async function replaceLocalStateFromCloud(remoteState) {
   renderAll();
 }
 
-async function reconcileCloudState() {
+async function reconcileCloudState(options = {}) {
   if (!cloudSync.configured || !cloudSync.session) return;
   if (!navigator.onLine) {
     cloudSync.pending = true;
@@ -1856,6 +1925,11 @@ async function reconcileCloudState() {
         localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(cloudSync.session));
       } else if (localMeaningful && !remoteMeaningful) {
         await pushCloudSnapshot(JSON.parse(JSON.stringify(state)));
+      } else if (localMeaningful && remoteMeaningful && options.mergeOnConnect) {
+        const merged = mergeImportedState(state, remote.state);
+        merged.meta.updatedAt = new Date().toISOString();
+        await replaceLocalStateFromCloud(merged);
+        await pushCloudSnapshot(JSON.parse(JSON.stringify(merged)));
       } else if (localMeaningful && remoteMeaningful && remoteUpdated > localUpdated) {
         await replaceLocalStateFromCloud(remote.state);
         cloudSync.session.lastSyncedAt = new Date().toISOString();
@@ -1924,22 +1998,23 @@ async function connectCloudAccount(event) {
   event.preventDefault();
   const token = syncTokenFromValue($("#sync-token").value);
   if (!token) {
-    $("#sync-form-note").textContent = "请粘贴完整的激活链接，或私人同步口令。";
+    $("#sync-form-note").textContent = "请粘贴完整的私密激活链接。";
     return;
   }
   setCloudStatus("connecting");
   $("#sync-form-note").textContent = "正在连接……";
   try {
     storeCloudSession(token);
-    await reconcileCloudState();
+    await reconcileCloudState({ mergeOnConnect: true });
+    cloudSync.justActivated = false;
     if (!cloudSync.session) throw new Error("同步口令不正确");
     $("#sync-token").value = "";
-    $("#sync-form-note").textContent = "链接中的口令只保存在这台手机，不会写入公开网页。";
+    $("#sync-form-note").textContent = "连接信息只保存在这台设备，不会写入公开网页。";
     showToast("已经连接。以后会自动同步。");
   } catch {
     clearCloudSession();
     setCloudStatus("disconnected");
-    $("#sync-form-note").textContent = "没有连接成功，请检查同步口令。";
+    $("#sync-form-note").textContent = "没有连接成功，请检查私密激活链接。";
   }
 }
 
@@ -1953,7 +2028,8 @@ function disconnectCloudAccount() {
 async function initializeCloudSync() {
   loadCloudSession();
   renderCloudStatus();
-  if (cloudSync.session) await reconcileCloudState();
+  if (cloudSync.session) await reconcileCloudState({ mergeOnConnect: cloudSync.justActivated });
+  cloudSync.justActivated = false;
 }
 
 function displayDateTime(value) {
@@ -2075,7 +2151,7 @@ async function importBackupFile(file) {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  const register = () => navigator.serviceWorker.register("./sw.js?v=20260903-v230").catch(() => {});
+  const register = () => navigator.serviceWorker.register("./sw.js?v=20260903-v240").catch(() => {});
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }
@@ -2173,6 +2249,16 @@ function bindEvents() {
     $("#quick-more-choices").hidden = expanded;
   });
   $("#note-list").addEventListener("click", (event) => {
+    const cloudAction = event.target.closest("[data-cloud-empty-action]")?.dataset.cloudEmptyAction;
+    if (cloudAction === "connect") {
+      openBackupDialog();
+      requestAnimationFrame(() => $("#sync-token")?.focus());
+      return;
+    }
+    if (cloudAction === "retry") {
+      reconcileCloudState();
+      return;
+    }
     const traceElement = event.target.closest("[data-quick-trace]");
     if (traceElement && event.target.closest("[data-stream-action]")) {
       const trace = quickTraceById(traceElement.dataset.quickTrace);

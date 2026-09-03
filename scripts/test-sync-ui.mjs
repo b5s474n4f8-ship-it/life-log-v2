@@ -81,20 +81,38 @@ try {
   const plain = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const plainPage = await plain.newPage();
   await plainPage.goto(appUrl);
-  await plainPage.click("#open-backup");
+  assert.equal(await plainPage.locator("[data-cloud-empty-state]").isVisible(), true);
+  assert.equal((await plainPage.locator("[data-cloud-empty-state]").textContent()).includes("云端历史尚未载入"), true);
+  await plainPage.click('[data-cloud-empty-action="connect"]');
   assert.equal(await plainPage.locator("#sync-connect-form").isVisible(), true);
+  assert.equal((await plainPage.locator(".sync-token-field").textContent()).trim(), "私密激活链接");
   await plain.close();
+
+  const cloudSeedContext = await configuredContext();
+  const cloudSeedPage = await cloudSeedContext.newPage();
+  await cloudSeedPage.goto(appUrl + "#sync=" + encodeURIComponent(token));
+  await cloudSeedPage.waitForFunction(() => document.querySelector("#header-sync-mark")?.classList.contains("is-synced"));
+  await cloudSeedPage.fill("#note-input", "云端已有历史记录");
+  await cloudSeedPage.click("#save-note");
+  await cloudSeedPage.waitForFunction(() => document.querySelector("#note-list")?.textContent.includes("云端已有历史记录"));
+  await cloudSeedPage.click("#open-backup");
+  await cloudSeedPage.click("#sync-now");
+  await cloudSeedPage.waitForFunction(() => document.querySelector("#header-sync-mark")?.classList.contains("is-synced"));
+  assert.equal(cloudState?.notes.some((note) => note.text === "云端已有历史记录"), true);
+  await cloudSeedContext.close();
 
   const migrationContext = await configuredContext();
   const migrationPage = await migrationContext.newPage();
   await migrationPage.goto(appUrl);
-  await migrationPage.fill("#note-input", "旧图标中的一条记录");
+  await migrationPage.fill("#note-input", "新入口本地记录");
   await migrationPage.click("#save-note");
   await migrationPage.click("#open-backup");
   await migrationPage.fill("#sync-token", workerUrl + "/#sync=" + encodeURIComponent(token));
   await migrationPage.click("#sync-connect-form button[type=submit]");
   await migrationPage.waitForFunction(() => document.querySelector("#header-sync-mark")?.classList.contains("is-synced"));
-  assert.equal(cloudState.notes.some((note) => note.text === "旧图标中的一条记录"), true);
+  assert.equal(cloudState.notes.some((note) => note.text === "云端已有历史记录"), true);
+  assert.equal(cloudState.notes.some((note) => note.text === "新入口本地记录"), true);
+  assert.equal(cloudState.notes.length, 2);
   await migrationContext.close();
   cloudState = null;
   putCount = 0;
@@ -107,6 +125,30 @@ try {
   await page.waitForFunction(() => !location.hash);
   await page.waitForFunction(() => document.querySelector("#header-sync-mark")?.classList.contains("is-synced"));
   assert.equal(cloudState, null);
+
+  const monthThemes = await page.evaluate(() => {
+    applyMonthTheme("2026-09");
+    const september = {
+      id: document.documentElement.dataset.monthTheme,
+      accent: getComputedStyle(document.documentElement).getPropertyValue("--blue").trim()
+    };
+    applyMonthTheme("2026-10");
+    const october = {
+      id: document.documentElement.dataset.monthTheme,
+      accent: getComputedStyle(document.documentElement).getPropertyValue("--blue").trim()
+    };
+    renderToday();
+    return { september, october };
+  });
+  assert.deepEqual(monthThemes.september, { id: "september", accent: "#3f7b59" });
+  assert.deepEqual(monthThemes.october, { id: "october", accent: "#b66731" });
+  const brandStyle = await page.locator(".brand-mark").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { border: style.borderTopWidth, image: style.backgroundImage, size: style.backgroundSize };
+  });
+  assert.equal(brandStyle.border, "0px");
+  assert.equal(brandStyle.image.includes("brand-art-v240.png"), true);
+  assert.equal(brandStyle.size, "100% 100%");
 
   assert.equal(await page.locator(".daily-memo").isVisible(), false);
   assert.deepEqual(
